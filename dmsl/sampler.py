@@ -18,6 +18,7 @@ from dmsl.accel_data import AccelData
 
 import dmsl.lensing_model as lm
 import dmsl.background_model as bm
+import dmsl.plotting as plot
 
 
 class Sampler():
@@ -40,6 +41,7 @@ class Sampler():
         self.load_data()
         self.logbarray = np.linspace(minlogb, maxlogb, 1000)
         self.run_inference()
+        self.make_diagnostic_plots()
 
 
     def run_inference(self):
@@ -55,11 +57,16 @@ class Sampler():
             if self.ndims == 1:
                 vl = pm.TruncatedNormal(name='vl', mu=0., sigma=220, lower=0, upper=550.)
             else:
-                vl = pm.Normal(name='vl', mu=0., sigma=220, shape=(self.nbims))
+                vl = pm.Normal(name='vl', mu=220., sigma=220, shape=(self.ndims))
             alphall = pm.Deterministic('alphal', lm.alphal(Ml, bs, vl))
 
             ## background signal
-            rmw = pm.TruncatedNormal(name='rmw', mu=AVE_RMW.value, sigma=SIGMA_RMW.value, lower=0., upper=2.)
+            if self.ndims == 1:
+                rmw = pm.TruncatedNormal(name='rmw', mu=AVE_RMW.value,
+                        sigma=SIGMA_RMW.value, lower=0., upper=2.)
+            else:
+                rmw = pm.Normal(name='rmw', mu=AVE_RMW.value,
+                        sigma=SIGMA_RMW.value, shape=(self.ndims))
             alphabb = pm.Deterministic('alphab', bm.alphab(rmw))
 
             ## set up obs
@@ -77,7 +84,7 @@ class Sampler():
         self.trace = trace
 
         ## save results
-        pklpath = make_file_path(RESULTSDIR, [self.nsamples, self.ndims],
+        pklpath = make_file_path(RESULTSDIR, [np.log10(self.nstars), np.log10(self.nsamples), self.ndims],
                 extra_string='trace', ext='.pkl')
         with open(pklpath, 'wb') as buff:
             pickle.dump(trace, buff)
@@ -105,5 +112,15 @@ class Sampler():
             self.data  = np.loadtxt(filepath)
 
         else:
-            self.data = AccelData(nstars=self.nstars, ndims=self.ndims)
+            AccelData(nstars=self.nstars, ndims=self.ndims)
+            self.data  = np.loadtxt(filepath)
+
+    def make_diagnostic_plots(self):
+        outpath = make_file_path(RESULTSDIR, [np.log10(self.nstars), np.log10(self.nsamples),
+            self.ndims],extra_string='traceplot', ext='.png')
+        plot.plot_trace(self.trace, outpath)
+
+        outpath = make_file_path(RESULTSDIR, [np.log10(self.nstars), np.log10(self.nsamples),
+            self.ndims],extra_string='corner', ext='.png')
+        plot.plot_corner(self.trace, outpath)
 

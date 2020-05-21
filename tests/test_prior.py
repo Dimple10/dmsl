@@ -26,10 +26,10 @@ ps.run_sampler()
 print('This took',str(datetime.datetime.now()-time1))
 
 
-ps = PriorSampler(nbsamples=100, log10Ml=3.,
+ps = PriorSampler(nbsamples=1, log10Ml=3.,
             nstars=int(1e8), overwrite=False)
 time1 = datetime.datetime.now()
-print('Finally let`s do the full 1e8 stars.')
+print('Finally let`s do the 1e7  stars.')
 print('Starting at {}'.format(time1))
 ps.run_sampler()
 print('This took',str(datetime.datetime.now()-time1))
