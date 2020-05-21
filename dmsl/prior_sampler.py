@@ -13,18 +13,23 @@ from dmsl  import __path__
 from dmsl.constants import *
 from dmsl.convenience import *
 from dmsl.paths import *
+from dmsl.star_field import StarField
 
 class PriorSampler():
 
     def __init__(self, nbsamples=100, log10Ml=3.,
-            nmbins=5., nstars= 1000, overwrite=False):
+            nmbins=5., nstars= 1000,overwrite=False):
 
+        self.nstars = nstars
         self.nbsamples = nbsamples
         self.log10Ml = log10Ml
-        self.star_pos = np.loadtxt(STARDATADIR+'nstars_'+str(nstars)+'.dat')
-        fileinds = [str(nstars), str(int(log10Ml)), str(nbsamples)]
-        s = '_'
-        self.outfile= s.join(fileinds)
+        starfile = STARPOSDIR+'nstars_'+str(int(np.log10(nstars)))+'.dat'
+        try:
+            self.star_pos = np.loadtxt(starfile)
+        except:
+            print('Need to make a new starfield...brb.')
+            StarField(nstars=nstars)
+            self.star_pos = np.loadtxt(starfile)
 
     def run_sampler(self):
 
@@ -41,8 +46,10 @@ class PriorSampler():
             j+=1
         logb = np.array(flatten(logb_dists))
         logbarray, plogb = self.make_kde(logb)
+        self.plogb = plogb
         ## now save to pickleable file.
-        pklpath = os.path.join(RESULTSDIR, 'plogb_'+str(self.outfile)+'.pkl')
+        pklpath= make_file_path(RESULTSDIR, [np.log10(self.nstars), self.log10Ml,
+            np.log10(self.nbsamples)], extra_string='plogb',ext='.pkl')
         with open(pklpath, 'wb') as buff:
             pickle.dump(plogb, buff)
         print('Wrote {}'.format(pklpath))
@@ -69,3 +76,5 @@ class PriorSampler():
         bs = np.linspace(logbmin, logbmax, self.nbsamples)
         logb = gaussian_kde(dist_)
         return bs, logb
+
+

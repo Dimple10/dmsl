@@ -11,6 +11,6 @@ from dmsl.constants import *
 
 def alphab(r_):
     alpha_units = (const.G*MASS_MWCORE/(1.*u.kpc**3)).to(u.uas/u.yr**2,
-            equivalences=u.dimensionless_angles())
+            equivalencies=u.dimensionless_angles())
     alphafromr = alpha_units.value*1./(r_**3)
     return alphafromr

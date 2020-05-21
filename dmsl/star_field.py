@@ -16,14 +16,18 @@ class StarField():
     def __init__(self,nstars=1000):
         self.nstars = nstars
 
+        print('Making field...')
         self.make_field()
+        print('Now saving field...')
         self.save_field()
+        print('All done making star field!')
 
     def make_field(self):
         starpos = np.random.rand(self.nstars,2)*FOV
         self.starpos = starpos
 
     def save_field(self):
-        outfile = STARDATADIR+'nstars_'+str(self.nstars)+'.dat'
+        outfile = STARPOSDIR+'nstars_'+str(int(np.log10(self.nstars)))+'.dat'
         np.savetxt(outfile, self.starpos)
+        print("Wrote to {}".format(outfile))
 
