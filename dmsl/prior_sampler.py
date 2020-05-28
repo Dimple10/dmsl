@@ -6,6 +6,7 @@ import os
 import numpy as np
 import pymc3 as pm
 import pickle
+import pandas as pd
 from scipy.spatial import distance
 from scipy.stats import gaussian_kde
 
@@ -25,11 +26,11 @@ class PriorSampler():
         self.log10Ml = log10Ml
         starfile = STARPOSDIR+'nstars_'+str(int(np.log10(nstars)))+'.dat'
         try:
-            self.star_pos = np.loadtxt(starfile)
+            self.star_pos = pd.read_csv(starfile).to_numpy()
         except:
             print('Need to make a new starfield...brb.')
             StarField(nstars=nstars)
-            self.star_pos = np.loadtxt(starfile)
+            self.star_pos = pd.read_csv(starfile).to_numpy()
 
     def run_sampler(self):
 
@@ -78,3 +79,9 @@ class PriorSampler():
         return bs, logb
 
 
+def find_nlens_pm(self, Ml_):
+
+    volume = (LENS_FOV)**2*DLENS/3.
+    mass = RHO_DM*volume
+    nlens_k = mass.value/Ml_
+    return pm.math.ceil(nlens_k)

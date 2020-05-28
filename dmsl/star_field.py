@@ -5,6 +5,7 @@ Make files with star positions
 import os
 import numpy as np
 import pickle
+import pandas as pd
 
 from dmsl import __path__
 from dmsl.constants import *
@@ -27,7 +28,8 @@ class StarField():
         self.starpos = starpos
 
     def save_field(self):
+        out = pd.DataFrame(self.starpos, columns=['x', 'y'])
         outfile = STARPOSDIR+'nstars_'+str(int(np.log10(self.nstars)))+'.dat'
-        np.savetxt(outfile, self.starpos)
+        out.to_csv(outfile, index=False)
         print("Wrote to {}".format(outfile))
 
