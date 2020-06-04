@@ -79,7 +79,14 @@ class PriorSampler():
         return bs, logb
 
 
-def find_nlens_pm(self, Ml_):
+def find_nlens_np(Ml_):
+
+    volume = (LENS_FOV)**2*DLENS/3.
+    mass = RHO_DM*volume
+    nlens_k = mass.value/Ml_
+    return np.ceil(nlens_k)
+
+def find_nlens_pm(Ml_):
 
     volume = (LENS_FOV)**2*DLENS/3.
     mass = RHO_DM*volume
