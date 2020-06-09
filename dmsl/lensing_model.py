@@ -16,15 +16,12 @@ def alphal(Ml_, b_, vl_, btheta_=None, vltheta_=None):
         acc_units = (4*const.G*u.Msun*(1.*u.km/u.s)**2/const.c**2*1./(1.*u.kpc)**3).to(u.uas/u.yr**2,
                 equivalencies=u.dimensionless_angles())
         vec_part = alphal_vec_exp(b_, vl_, 0., 0.).norm(2)
-        pmprint(vec_part)
         alphal = acc_units.value*Ml_*vec_part
-        pmprint(alphal)
         return alphal
     else:
         acc_units = (4*const.G*u.Msun*(1.*u.km/u.s)**2/const.c**2*1./(1.*u.kpc)**3).to(u.uas/u.yr**2,
                 equivalencies=u.dimensionless_angles())
         accmag = acc_units.value*Ml_
-        print(accmag)
         vec_part = alphal_vec_exp(b_, vl_, btheta_, vltheta_)
         pmprint(vec_part)
         alphal = accmag*vec_part

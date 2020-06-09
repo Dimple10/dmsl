@@ -77,8 +77,8 @@ class Sampler():
             #        sigma=SIGMA_RMW.value, lower=0., upper=2.)
             rmw = pm.Exponential(name='rmw', lam=1./RD_MW.value)
             if self.ndims==2:
-                rmwtheta = pm.Uniform(name='rmwtheta', lower=0.5267,
-                        upper=1.043)
+                rmwtheta = pm.Uniform(name='rmwtheta', lower=0.299,
+                        upper=1.272) ## see test_angles.py in tests.
             else:
                 rmwtheta = None
 

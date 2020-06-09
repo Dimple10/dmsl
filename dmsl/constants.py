@@ -7,6 +7,7 @@ import numpy as np
 FB_BINS = 10
 DSTARS = 8.*u.kpc
 DLENS  = 1.*u.kpc
+FOV_DEG = np.sqrt(0.28)*u.deg
 FOV = np.sqrt(0.28)*np.pi/180 ##in radians
 STAR_FOV = (FOV*DLENS).to(u.kpc) ## i.e. 1 side of WFIRST FOV to physical distance @ galactic center.
 LENS_FOV = (FOV*DLENS).to(u.kpc)

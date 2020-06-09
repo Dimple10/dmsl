@@ -10,6 +10,7 @@ from astropy.coordinates import SkyCoord
 import pymc3 as pm
 
 from dmsl.constants import *
+from dmsl.convenience import prange
 
 def alphab(r_, rtheta_=None):
     alpha_units = (const.G*MASS_MWCORE/(1.*u.kpc**3)).to(u.uas/u.yr**2,
@@ -24,8 +25,14 @@ def alphab(r_, rtheta_=None):
 
     return alphafromr
 
-def get_theta_to_GC(l=1.*u.deg, b=-1*u.deg):
-    wfirst = SkyCoord(l=l, b=b, frame='galactic')
+def get_theta_to_GC(lcen=1.*u.deg, bcen=-1*u.deg):
+    x = np.array([lcen.value-FOV_DEG.value, lcen.value+FOV_DEG.value])
+    y = np.array([bcen.value-FOV_DEG.value, bcen.value+FOV_DEG.value])
+    coords = np.transpose([np.tile(x, len(y)), np.repeat(y, len(x))])
+    wfirst = SkyCoord(l=coords[:,0]*u.deg, b=coords[:,1]*u.deg, frame='galactic')
     gc = SkyCoord(l=0*u.deg, b=0*u.deg, frame='galactic')
     theta = (wfirst.position_angle(gc).to(u.deg) - 270*u.deg).to(u.rad)
+    prange(theta)
     return theta.value
+
+
