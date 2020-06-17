@@ -14,9 +14,9 @@ from dmsl.convenience import *
 from dmsl.accel_data import AccelData
 from dmsl.plotting import *
 
-nstars = 1e5
+nstars = 1e3
 nsamples = 2e3
-ndims = 1
+ndims = 2
 fileinds =  [np.log10(nstars), np.log10(nsamples), ndims]
 ## load trace
 pklpath = make_file_path(RESULTSDIR, fileinds,

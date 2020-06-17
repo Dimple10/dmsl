@@ -58,7 +58,6 @@ class Sampler():
                     self.plogb(self.logbarray))
             bs_raw = pm.math.exp(logbs)
             bs = bs_raw/(nlens)**(1./3.)
-            pmprint(bs)
             vl = pm.TruncatedNormal(name='vl', mu=0., sigma=220, lower=0, upper=550.)
             if self.ndims==2:
                 bstheta = pm.Uniform(name='bstheta', lower=0, upper=np.pi/2.)
@@ -71,10 +70,7 @@ class Sampler():
                 btheta_=bstheta, vltheta_=vltheta)
             logalphal = pm.Deterministic('logabsalphal',
                     pm.math.log(pm.math.abs_(alphal)))
-            pmprint(alphal)
             ## background signal
-            #rmw = pm.TruncatedNormal(name='rmw', mu=AVE_RMW.value,
-            #        sigma=SIGMA_RMW.value, lower=0., upper=2.)
             rmw = pm.Exponential(name='rmw', lam=1./RD_MW.value)
             if self.ndims==2:
                 rmwtheta = pm.Uniform(name='rmwtheta', lower=0.299,

@@ -23,7 +23,6 @@ def alphal(Ml_, b_, vl_, btheta_=None, vltheta_=None):
                 equivalencies=u.dimensionless_angles())
         accmag = acc_units.value*Ml_
         vec_part = alphal_vec_exp(b_, vl_, btheta_, vltheta_)
-        pmprint(vec_part)
         alphal = accmag*vec_part
         return alphal
 
