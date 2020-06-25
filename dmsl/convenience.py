@@ -21,6 +21,7 @@ flatten = lambda l: [item for sublist in l for item in sublist]
 
 # print in pymc3 model
 pmprint = lambda x: print(xo.eval_in_model(x))
+pmpshape = lambda x: print(np.shape(xo.eval_in_model(x)))
 
 # useful print statements
 prange = lambda _: print('min:', np.min(_), 'max:', np.max(_))

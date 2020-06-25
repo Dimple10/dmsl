@@ -3,3 +3,5 @@ data/*
 results/*
 *.egg-info*
 *.DS_Store
+tests/.ipynb*
+tests/*.ipynb

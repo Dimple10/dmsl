@@ -23,7 +23,7 @@ import dmsl.plotting as plot
 
 class Sampler():
 
-    def __init__(self, nstars=1000, nbsamples=100, nsamples=2000, nchains=8,
+    def __init__(self, nstars=1000, nbsamples=100, nsamples=2000000, nchains=8,
             ncores=2, ntune=1000, ndims=1, nblog10Ml=3, minlogMl=np.log(1e3),
             maxlogMl=np.log(1e8), minlogb =
             -15., maxlogb = 1.,overwrite=True):
@@ -54,11 +54,13 @@ class Sampler():
             Ml = pm.math.exp(logMl)
             #nlens = pm.Poisson(name='nlens', mu=find_nlens_pm(Ml))
             nlens = find_nlens_pm(Ml)
-            logbs = Interpolated('logbs',self.logbarray,
-                    self.plogb(self.logbarray))
-            bs_raw = pm.math.exp(logbs)
+            #logbs = Interpolated('logbs',self.logbarray,
+            #        self.plogb(self.logbarray), shape=(self.nstars))
+            #bs_raw = pm.math.exp(logbs)
+            bs_raw = 4.e-3
             bs = bs_raw/(nlens)**(1./3.)
-            vl = pm.TruncatedNormal(name='vl', mu=0., sigma=220, lower=0, upper=550.)
+            vl = pm.TruncatedNormal(name='vl', mu=0., sigma=220, lower=0,
+                    upper=550.)
             if self.ndims==2:
                 bstheta = pm.Uniform(name='bstheta', lower=0, upper=np.pi/2.)
                 vltheta = pm.Uniform(name='vltheta', lower=0, upper=np.pi/2.)
