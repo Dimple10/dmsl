@@ -50,6 +50,22 @@ def plot_emcee(flatchain, outpath):
     plt.ylabel(r'$p(M_l)$');
     savefig(fig, outpath, writepdf=0, dpi=100)
 
+def plot_chains(samples, outpath):
+    fig = plt.figure()
+    plt.plot(samples[:,:,0])
+    plt.ylabel(r'$M_l$');
+    plt.xlabel(r'N');
+    savefig(fig, outpath, writepdf=0, dpi=100)
+
+def plot_logprob(samples, outpath):
+    fig = plt.figure()
+    plt.plot(np.abs(samples))
+    plt.yscale('log')
+    plt.ylabel(r'$\log \mathcal{L}$');
+    plt.xlabel(r'N');
+    savefig(fig, outpath, writepdf=0, dpi=100)
+
+
 def plot_corner(trace, outpath):
     # corner plot of posterior samples
     plt.close('all')

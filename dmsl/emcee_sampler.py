@@ -43,6 +43,7 @@ class Sampler():
     def run_inference(self):
         npar, nwalkers = self.ndims, self.nchains
         p0 = np.random.rand(nwalkers, npar)*(self.maxlogMl-self.minlogMl)+self.minlogMl
+        print(p0)
 
         sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike)
         sampler.run_mcmc(p0, self.ntune+self.nsamples, progress=True)
@@ -56,8 +57,8 @@ class Sampler():
             pickle.dump(samples, buff)
         print('Wrote {}'.format(pklpath))
 
-        ## save flatchain to class
-        self.flatchain = sampler.get_chain(flat=True)
+        ## save samples to class
+        self.sampler = sampler
 
     def logprior(self,pars):
         log10Ml = pars
@@ -126,5 +127,12 @@ class Sampler():
     def make_diagnostic_plots(self):
         outpath = make_file_path(RESULTSDIR, [np.log10(self.nstars), np.log10(self.nsamples),
             self.ndims],extra_string='posteriorplot', ext='.png')
-        plot.plot_emcee(self.flatchain, outpath)
+        ##FIXME: should also thin out samples by half the autocorr time.
+        plot.plot_emcee(self.sampler.get_chain(flat=True, discard=self.ntune), outpath)
+        outpath = make_file_path(RESULTSDIR, [np.log10(self.nstars), np.log10(self.nsamples),
+            self.ndims],extra_string='chainsplot', ext='.png')
+        plot.plot_chains(self.sampler.get_chain(), outpath)
+        outpath = make_file_path(RESULTSDIR, [np.log10(self.nstars), np.log10(self.nsamples),
+            self.ndims],extra_string='logprobplot', ext='.png')
+        plot.plot_logprob(self.sampler.get_log_prob(), outpath)
 
