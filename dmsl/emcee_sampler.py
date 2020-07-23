@@ -23,7 +23,7 @@ import dmsl.background_model as bm
 class Sampler():
 
     def __init__(self, nstars=1000, nbsamples=100, nsamples=1000, nchains=8,
-            ntune=1000, ndims=1, nblog10Ml=3, minlogMl=np.log10(1e3),
+            ntune=1000, ndims=1, nblog10Ml=3, minlogMl=np.log10(1e0),
             maxlogMl=np.log10(1e8), minlogb =-15., maxlogb = 1.,overwrite=True):
         self.nstars=nstars
         self.nbsamples=nbsamples
@@ -42,10 +42,12 @@ class Sampler():
 
     def run_inference(self):
         npar, nwalkers = self.ndims, self.nchains
-        p0 = np.random.rand(nwalkers, npar)*(self.maxlogMl-self.minlogMl)+self.minlogMl
+        #p0 = np.random.rand(nwalkers, npar)*(self.maxlogMl-self.minlogMl)+self.minlogMl
+        p0 = np.random.rand(nwalkers, npar)*1.0+self.minlogMl+2.
         print(p0)
 
-        sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike)
+        sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike,
+                moves=[(emcee.moves.DEMove(), 0.8), (emcee.moves.DESnookerMove(), 0.2),])
         sampler.run_mcmc(p0, self.ntune+self.nsamples, progress=True)
 
         samples = sampler.get_chain(discard=self.ntune)

@@ -27,7 +27,7 @@ def paper_plot():
             'axes.labelsize':20.,
             'xtick.labelsize':16,
             'ytick.labelsize':16,
-            'figure.figsize':[14., 12.],
+            'figure.figsize':[6., 4.],
             'font.family':'DejaVu Sans',
             'legend.fontsize':12}
     plt.rcParams.update(figparams)
@@ -42,6 +42,8 @@ def plot_trace(trace, outpath):
     print('{}: made {}'.format(datetime.now().isoformat(), outpath))
 
 def plot_emcee(flatchain, outpath):
+    plt.close('all')
+    paper_plot()
     up95 = np.percentile(flatchain,68)
     fig = plt.figure()
     plt.hist(flatchain[:, 0], 50, color="k", histtype="step", density=True);
@@ -51,6 +53,8 @@ def plot_emcee(flatchain, outpath):
     savefig(fig, outpath, writepdf=0, dpi=100)
 
 def plot_chains(samples, outpath):
+    plt.close('all')
+    paper_plot()
     fig = plt.figure()
     plt.plot(samples[:,:,0])
     plt.ylabel(r'$M_l$');
@@ -58,10 +62,12 @@ def plot_chains(samples, outpath):
     savefig(fig, outpath, writepdf=0, dpi=100)
 
 def plot_logprob(samples, outpath):
+    plt.close('all')
+    paper_plot()
     fig = plt.figure()
-    plt.plot(np.abs(samples))
+    plt.plot(np.abs(samples[100:]))
     plt.yscale('log')
-    plt.ylabel(r'$\log \mathcal{L}$');
+    plt.ylabel(r'$\mid \log \mathcal{L} \mid$');
     plt.xlabel(r'N');
     savefig(fig, outpath, writepdf=0, dpi=100)
 
