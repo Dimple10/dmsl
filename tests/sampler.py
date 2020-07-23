@@ -3,14 +3,15 @@ Test that sampler works
 '''
 
 
-from dmsl.sampler import *
+#from dmsl.sampler import *
+from dmsl.emcee_sampler import *
 import datetime
 
-nn = 1e0
+nn = 1e3
 
 time1 = datetime.datetime.now()
 print('First let`s do a short run with only magnitude of the acceleration.')
-s = Sampler(nstars=int(nn), ncores=4)
+s = Sampler(nstars=int(nn))
 print('This took',str(datetime.datetime.now()-time1))
 
 

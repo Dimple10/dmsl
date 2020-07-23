@@ -41,6 +41,15 @@ def plot_trace(trace, outpath):
     plt.savefig(outpath, dpi=100)
     print('{}: made {}'.format(datetime.now().isoformat(), outpath))
 
+def plot_emcee(flatchain, outpath):
+    up95 = np.percentile(flatchain,68)
+    fig = plt.figure()
+    plt.hist(flatchain[:, 0], 50, color="k", histtype="step", density=True);
+    plt.axvline(up95)
+    plt.xlabel(r'$M_l$');
+    plt.ylabel(r'$p(M_l)$');
+    savefig(fig, outpath, writepdf=0, dpi=100)
+
 def plot_corner(trace, outpath):
     # corner plot of posterior samples
     plt.close('all')
