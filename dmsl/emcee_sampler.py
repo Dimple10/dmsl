@@ -92,18 +92,18 @@ class Sampler():
         alphal = lm.alphal_np(Ml, beff, vl,
             btheta_=bstheta, vltheta_=vltheta)
         ## background signal
-        rmw = pm.Exponential.dist(lam=1./RD_MW.value).random()
-        if self.ndims==2:
-            rmwtheta = pm.Uniform(name='rmwtheta', lower=0.299,
-                    upper=1.272) ## see test_angles.py in tests.
-        else:
-            rmwtheta = None
+        ##rmw = pm.Exponential.dist(lam=1./RD_MW.value).random()
+        ##if self.ndims==2:
+        ##     rmwtheta = pm.Uniform(name='rmwtheta', lower=0.299,
+        ##             upper=1.272) ## see test_angles.py in tests.
+        ## else:
+        ##     rmwtheta = None
 
-        alphab = bm.alphab(rmw,
-            rtheta_=rmwtheta)
+        #alphab = bm.alphab(rmw,rtheta_=rmwtheta)
+        sigalphab = bm.sig_alphab()
 
-        diff = alphal - (self.data-alphab)
-        chisq = np.sum(diff**2/WFIRST_SIGMA.value**2)
+        diff = alphal - self.data
+        chisq = np.sum(diff**2/(WFIRST_SIGMA.value**2+sigalphab.value**2))
         return -0.5*chisq
 
     def load_starpos(self):

@@ -38,6 +38,16 @@ def alphab_np(r_, rtheta_=None):
 
     return alphafromr
 
+def sig_alphab():
+    ## assumes 10% error on radius from MW center.
+    ## also assumes stars are 1 kpc from MW center.
+    sigalpha_units = (const.G*MASS_MWCORE/(1.*u.kpc**3)).to(u.uas/u.yr**2,
+            equivalencies=u.dimensionless_angles())
+    distterm = 1./8. ##assume stars are 8 kpc from us.
+    errterm = 2.*1./(1.**3)*0.01 ## assume 1 kpc from center of MW and 10%err.
+    sigalphab = sigalpha_units*distterm*errterm
+    return sigalphab
+
 def get_theta_to_GC(lcen=1.*u.deg, bcen=-1*u.deg):
     x = np.array([lcen.value-FOV_DEG.value, lcen.value+FOV_DEG.value])
     y = np.array([bcen.value-FOV_DEG.value, bcen.value+FOV_DEG.value])
