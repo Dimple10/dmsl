@@ -34,6 +34,8 @@ class Sampler():
         self.ndims=ndims
         self.minlogMl = minlogMl
         self.maxlogMl = maxlogMl
+        #self.sigalphab = bm.sig_alphab()
+        self.sigalphab = 0.*u.uas/u.yr**2
 
         self.load_starpos()
         self.load_data()
@@ -42,9 +44,8 @@ class Sampler():
 
     def run_inference(self):
         npar, nwalkers = self.ndims, self.nchains
-        #p0 = np.random.rand(nwalkers, npar)*(self.maxlogMl-self.minlogMl)+self.minlogMl
-        p0 = np.random.rand(nwalkers, npar)*1.0+self.minlogMl+2.
-        print(p0)
+        p0 = np.random.rand(nwalkers, npar)*(self.maxlogMl-self.minlogMl)+self.minlogMl
+        #p0 = np.random.rand(nwalkers, npar)*1.0+self.minlogMl+2.
 
         sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike,
                 moves=[(emcee.moves.DEMove(), 0.8), (emcee.moves.DESnookerMove(), 0.2),])
@@ -100,10 +101,9 @@ class Sampler():
         ##     rmwtheta = None
 
         #alphab = bm.alphab(rmw,rtheta_=rmwtheta)
-        sigalphab = bm.sig_alphab()
 
         diff = alphal - self.data
-        chisq = np.sum(diff**2/(WFIRST_SIGMA.value**2+sigalphab.value**2))
+        chisq = np.sum(diff**2/(WFIRST_SIGMA.value**2+self.sigalphab.value**2))
         return -0.5*chisq
 
     def load_starpos(self):
