@@ -27,6 +27,7 @@ def alphal(Ml_, b_, vl_, btheta_=None, vltheta_=None):
         return alphal
 
 def alphal_vec_exp(b, vl, btheta, vltheta,  vldot = None):
+    # FIXME: delete or update with Ml profile.
     bmag, bunit = make_mag_units_vecs(b, btheta)
     vvec = make_xyvec(vl, vltheta)[:,None]
     term1 = -8.*(pm.math.dot(vvec.T, bunit)**2/bmag**3)*bunit
@@ -93,20 +94,34 @@ def alphal_np(Ml_, b_, vl_, btheta_=None, vltheta_=None):
         alphal = accmag*vec_part
         return alphal
 
-def alphal_vec_exp_np(b, vl, btheta, vltheta,  vldot = None):
+def alphal_vec_exp_np(b, vl, btheta, vltheta,  vldot = None, Mlprofile = None):
     bmag, bunit = make_mag_units_vecs_np(b, btheta)
     vvec = make_xyvec_np(vl, vltheta)
-    term1 = -8.*(np.dot(bunit.T, vvec).reshape(len(bmag))**2/bmag**3).T*bunit
-    return term1
+    ## A(b) term
+    Aterm1 = -8.*(np.dot(bunit.T, vvec).reshape(len(bmag))**2).T*bunit
+    Aterm2 = 0.
+    Aterm3 = 2.*vl**2*bunit
+    Aterm4 = 4.*np.dot(bunit.T, vvec).reshape(len(bmag))*vvec
+    Aterm5 = 0.
     if vldot != None:
-        term2 = 2.*(np.dot(bunit, vldot)/bmag**2)*bunit
-        term5 = -1.*vldot/bmag**2
-    else:
-        term2 = 0.
-        term5 = 0.
-    term3 = 2.*vl**2/bmag**3*bunit
-    term4 = 4.*np.dot(bunit.T, vvec).reshape(len(bmag))*vvec/bmag**3
-    alphal_vec = term1 + term2 + term3 + term4 + term5
+        Aterm2 += 2.*(np.dot(bunit, vldot))*bunit*bmag
+        Aterm5 += -1.*vldot*bmag
+    Aterm = 1./bmag**3*(Aterm1 + Aterm2 + Aterm3 + Aterm4 + Aterm5)
+
+    ## B(b) term
+    Bterm1 = 5.*(np.dot(bunit.T, vvec).reshape(len(bmag))**2).T*bunit
+    Bterm2 = 2.*np.dot(bunit.T, vvec).reshape(len(bmag))*vvec
+    Bterm3 = 0.
+    Bterm4 = -1.*vl**2*bunit
+    if vldot != None:
+        Bterm3 += -1.*(np.dot(bunit, vldot))*bunit*bmag
+    ## TODO: need to create function to get Mlprime (or use mass profile class?)
+    Bterm = Mlprime/bmag**2*(Bterm1 + Bterm2 + Bterm3 + Bterm4)
+
+    ## C(b) term
+    Cterm = Mlpprime/bmag*(np.dot(bunit.T, vvec).reshape(len(bmag))**2).T*bunit
+
+    alphal_vec = Aterm + Bterm + Cterm
     return alphal_vec
 
 def alphal_theta_np(Ml_, b_, vl_, btheta_=None, vltheta_=None):
