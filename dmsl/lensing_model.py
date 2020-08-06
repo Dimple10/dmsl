@@ -8,6 +8,7 @@ import astropy.constants as const
 import exoplanet as xo
 import pymc3 as pm
 
+from scipy.interpolate import UnivariateSpline
 from dmsl.convenience import pmprint, pmpshape, pshape
 
 def alphal(Ml_, b_, vl_, btheta_=None, vltheta_=None):
@@ -78,19 +79,30 @@ def make_xyvec(r, theta):
 
 
 
-def alphal_np(Ml_, b_, vl_, btheta_=None, vltheta_=None):
+def alphal_np(Ml_, b_, vl_, btheta_=None, vltheta_=None, Mlprofile = None):
 
     if vltheta_ == None:
         acc_units = (4*const.G*u.Msun*(1.*u.km/u.s)**2/const.c**2*1./(1.*u.kpc)**3).to(u.uas/u.yr**2,
                 equivalencies=u.dimensionless_angles())
-        vec_part = np.linalg.norm(alphal_vec_exp_np(b_, vl_, 0., 0.), axis=0)
-        alphal = acc_units.value*Ml_*vec_part
+        if Mlprofile == None:
+            vec_part = np.linalg.norm(alphal_vec_exp_np(b_, vl_, 0., 0.), axis=0)
+            alphal = acc_units.value*Ml_*vec_part
+        else:
+            vec_part = np.linalg.norm(alphal_vec_exp_np(b_, vl_, 0., 0.,
+                Mlprofile=Mlprofile), axis=0)
+            alphal = acc_units.value*vec_part
+
         return alphal
     else:
         acc_units = (4*const.G*u.Msun*(1.*u.km/u.s)**2/const.c**2*1./(1.*u.kpc)**3).to(u.uas/u.yr**2,
                 equivalencies=u.dimensionless_angles())
-        accmag = acc_units.value*Ml_
-        vec_part = alphal_vec_exp_np(b_, vl_, btheta_, vltheta_)
+        if Mlprofile == None:
+            accmag = acc_units.value*Ml_
+            vec_part = alphal_vec_exp_np(b_, vl_, btheta_, vltheta_)
+        else:
+            vec_part = np.linalg.norm(alphal_vec_exp_np(b_, vl_, 0., 0.,
+                Mlprofile=Mlprofile), axis=0)
+            accmag = acc_units.value
         alphal = accmag*vec_part
         return alphal
 
@@ -107,19 +119,29 @@ def alphal_vec_exp_np(b, vl, btheta, vltheta,  vldot = None, Mlprofile = None):
         Aterm2 += 2.*(np.dot(bunit, vldot))*bunit*bmag
         Aterm5 += -1.*vldot*bmag
     Aterm = 1./bmag**3*(Aterm1 + Aterm2 + Aterm3 + Aterm4 + Aterm5)
-
-    ## B(b) term
-    Bterm1 = 5.*(np.dot(bunit.T, vvec).reshape(len(bmag))**2).T*bunit
-    Bterm2 = 2.*np.dot(bunit.T, vvec).reshape(len(bmag))*vvec
-    Bterm3 = 0.
-    Bterm4 = -1.*vl**2*bunit
-    if vldot != None:
-        Bterm3 += -1.*(np.dot(bunit, vldot))*bunit*bmag
-    ## TODO: need to create function to get Mlprime (or use mass profile class?)
-    Bterm = Mlprime/bmag**2*(Bterm1 + Bterm2 + Bterm3 + Bterm4)
-
-    ## C(b) term
-    Cterm = Mlpprime/bmag*(np.dot(bunit.T, vvec).reshape(len(bmag))**2).T*bunit
+    if Mlprofile != None:
+        Mlb = UnivariateSpline(Mlprofile.bs.value, Mlprofile.profile.value,
+                s=0., ext='extrapolate')
+        Mlp = UnivariateSpline(Mlprofile.bs.value, Mlprofile.mprime.value,
+                s=0., ext='extrapolate')
+        Mlpp = UnivariateSpline(Mlprofile.bs.value, Mlprofile.mpprime.value,
+                s=0., ext='extrapolate')
+        Aterm *= Mlb(bmag)
+        ## B(b) term
+        Bterm1 = 5.*(np.dot(bunit.T, vvec).reshape(len(bmag))**2).T*bunit
+        Bterm2 = 2.*np.dot(bunit.T, vvec).reshape(len(bmag))*vvec
+        Bterm3 = 0.
+        Bterm4 = -1.*vl**2*bunit
+        if vldot != None:
+            Bterm3 += -1.*(np.dot(bunit, vldot))*bunit*bmag
+        Bterm = 1./bmag**2*(Bterm1 + Bterm2 + Bterm3 + Bterm4)
+        Bterm *= Mlp(bmag)
+        ## C(b) term
+        Cterm = 1./bmag*(np.dot(bunit.T, vvec).reshape(len(bmag))**2).T*bunit
+        Cterm *= Mlpp(bmag)
+    else:
+        Bterm = 0.
+        Cterm = 0.
 
     alphal_vec = Aterm + Bterm + Cterm
     return alphal_vec
