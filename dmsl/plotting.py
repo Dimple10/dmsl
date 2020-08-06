@@ -48,7 +48,7 @@ def plot_emcee(flatchain, outpath):
     fig = plt.figure()
     plt.hist(flatchain[:, 0], 50, color="k", histtype="step", density=True);
     plt.axvline(up95)
-    plt.xlabel(r'$M_l$');
+    plt.xlabel(r'$\log_{10} M_l$');
     plt.ylabel(r'$p(M_l)$');
     savefig(fig, outpath, writepdf=0, dpi=100)
 
@@ -57,7 +57,7 @@ def plot_chains(samples, outpath):
     paper_plot()
     fig = plt.figure()
     plt.plot(samples[:,:,0])
-    plt.ylabel(r'$M_l$');
+    plt.ylabel(r'$\log_{10} M_l$');
     plt.xlabel(r'N');
     savefig(fig, outpath, writepdf=0, dpi=100)
 

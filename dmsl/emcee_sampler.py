@@ -18,13 +18,15 @@ import dmsl.plotting as plot
 
 import dmsl.lensing_model as lm
 import dmsl.background_model as bm
+import dmsl.mass_profile as mp
 
 
 class Sampler():
 
     def __init__(self, nstars=1000, nbsamples=100, nsamples=1000, nchains=8,
             ntune=1000, ndims=1, nblog10Ml=3, minlogMl=np.log10(1e0),
-            maxlogMl=np.log10(1e8), minlogb =-15., maxlogb = 1.,overwrite=True):
+            maxlogMl=np.log10(1e8), minlogb =-15., maxlogb = 1.,
+            MassProfile=None, overwrite=True):
         self.nstars=nstars
         self.nbsamples=nbsamples
         self.nblog10Ml=nblog10Ml
@@ -36,6 +38,7 @@ class Sampler():
         self.maxlogMl = maxlogMl
         #self.sigalphab = bm.sig_alphab()
         self.sigalphab = 0.*u.uas/u.yr**2
+        self.massprofile = MassProfile
 
         self.load_starpos()
         self.load_data()
@@ -54,8 +57,10 @@ class Sampler():
         samples = sampler.get_chain(discard=self.ntune)
 
         ## save results
-        pklpath = make_file_path(RESULTSDIR, [np.log10(self.nstars), np.log10(self.nsamples), self.ndims],
-                extra_string='samples', ext='.pkl')
+        pklpath = make_file_path(RESULTSDIR, [np.log10(self.nstars),
+            np.log10(self.nsamples), self.ndims],
+            extra_string=f'samples_{self.massprofile.type}',
+            ext='.pkl')
         with open(pklpath, 'wb') as buff:
             pickle.dump(samples, buff)
         print('Wrote {}'.format(pklpath))
@@ -75,6 +80,7 @@ class Sampler():
         if ~np.isfinite(self.logprior(pars)):
             return -np.inf
         Ml = 10**log10Ml
+        newmassprofile = self.make_new_mass(Ml)
         nlens = int(find_nlens_np(Ml))
         x= pm.Triangular.dist(lower=0, upper=FOV,c=FOV/2.).random(size=nlens)
         y= pm.Triangular.dist(lower=0, upper=FOV,c=FOV/2.).random(size=nlens)
@@ -90,8 +96,8 @@ class Sampler():
             bstheta = None
             vltheta = None
 
-        alphal = lm.alphal_np(Ml, beff, vl,
-            btheta_=bstheta, vltheta_=vltheta)
+        alphal = lm.alphal_np(Ml, beff, vl, btheta_=bstheta, vltheta_=vltheta,
+                Mlprofile=newmassprofile)
         ## background signal
         ##rmw = pm.Exponential.dist(lam=1./RD_MW.value).random()
         ##if self.ndims==2:
@@ -127,14 +133,37 @@ class Sampler():
             self.data = pd.read_csv(filepath).to_numpy(dtype=np.float64)
 
     def make_diagnostic_plots(self):
-        outpath = make_file_path(RESULTSDIR, [np.log10(self.nstars), np.log10(self.nsamples),
-            self.ndims],extra_string='posteriorplot', ext='.png')
+        outpath = make_file_path(RESULTSDIR, [np.log10(self.nstars),
+            np.log10(self.nsamples),
+            self.ndims],extra_string=f'posteriorplot_{self.massprofile.type}',
+            ext='.png')
         ##FIXME: should also thin out samples by half the autocorr time.
         plot.plot_emcee(self.sampler.get_chain(flat=True, discard=self.ntune), outpath)
-        outpath = make_file_path(RESULTSDIR, [np.log10(self.nstars), np.log10(self.nsamples),
-            self.ndims],extra_string='chainsplot', ext='.png')
+        outpath = make_file_path(RESULTSDIR, [np.log10(self.nstars),
+            np.log10(self.nsamples),
+            self.ndims],extra_string=f'chainsplot_{self.massprofile.type}',
+            ext='.png')
         plot.plot_chains(self.sampler.get_chain(), outpath)
-        outpath = make_file_path(RESULTSDIR, [np.log10(self.nstars), np.log10(self.nsamples),
-            self.ndims],extra_string='logprobplot', ext='.png')
+        outpath = make_file_path(RESULTSDIR, [np.log10(self.nstars),
+            np.log10(self.nsamples),
+            self.ndims],extra_string=f'logprobplot_{self.massprofile.type}',
+            ext='.png')
         plot.plot_logprob(self.sampler.get_log_prob(), outpath)
+
+    def make_new_mass(self,Ml_):
+        mptype = self.massprofile.type
+        kwargs = self.massprofile.kwargs
+        if mptype == 'constdens':
+            kwargs['rho0'] = Ml_*u.Msun/u.pc**3
+            newmp = mp.ConstDens(**kwargs)
+        elif mptype == 'exp':
+            kwargs['M0'] = Ml_*u.Msun
+            newmp = mp.Exp(**kwargs)
+        elif mptype == 'gaussian':
+            kwargs['M0'] = Ml_*u.Msun
+            newmp = mp.Gaussian(**kwargs)
+        else:
+            raise NotImplementedError("""Need to add this mass profile to
+            sampler.""")
+        return newmp
 

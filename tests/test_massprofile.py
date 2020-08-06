@@ -7,6 +7,7 @@ from dmsl.mass_profile import *
 from dmsl.plotting import paper_plot, savefig
 from dmsl.paths import *
 import dmsl.lensing_model as lm
+from dmsl.prior_sampler import find_nlens_np
 
 def plot_massprofile(m_):
     paper_plot()
@@ -31,18 +32,25 @@ m = ConstDens(**props)
 exprops = {'M0':1.e8*u.Msun, 'rs':bs*u.kpc, 'rd':0.01*u.kpc}
 mexp = Exp(**exprops)
 
+gaussprops = {'M0':1.e6*u.Msun, 'rs':bs*u.kpc, 'R0':0.01*u.kpc}
+gauss = Gaussian(**gaussprops)
+
 plot_massprofile(mexp)
+plot_massprofile(gauss)
 
 alphapoint = lm.alphal_np(1.e8, bs, 300.)
 alphas = lm.alphal_np(None, bs, 300., btheta_=None, vltheta_=None, Mlprofile = m)
 alphasexp = lm.alphal_np(None, bs, 300., btheta_=None, vltheta_=None,
         Mlprofile = mexp)
+alphasgauss = lm.alphal_np(None, bs, 300., btheta_=None, vltheta_=None,
+        Mlprofile = gauss)
 
 paper_plot()
 f = plt.figure()
 plt.plot(bs, alphapoint, c='black', label=r'$\rm{Point~Lens}$')
 plt.plot(bs, alphas, label=f'$\\rm {m.nicename}$')
 plt.plot(bs, alphasexp, label=f'$\\rm {mexp.nicename}$')
+plt.plot(bs, alphasgauss, label=f'$\\rm {gauss.nicename}$')
 plt.legend()
 plt.yscale('log')
 plt.xscale('log')
@@ -52,3 +60,11 @@ plt.ylabel(r'$\alpha_l~[\mu\rm{as}/\rm{yr}^2]$')
 
 figpath = RESULTSDIR+'test_alphasprofile.png'
 savefig(f, figpath, writepdf=False)
+
+
+## check peak in posterior i'm seeing
+props = {'rho0': 3.e2*u.Msun/u.pc**3, 'rs':bs*u.kpc}
+m = ConstDens(**props)
+alphas = lm.alphal_np(None, bs, 300., btheta_=None, vltheta_=None, Mlprofile = m)
+print(np.average(alphas))
+print(find_nlens_np(1.e2))
