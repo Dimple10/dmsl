@@ -9,12 +9,12 @@ import datetime
 from dmsl.mass_profile import *
 
 bs = np.logspace(-3, 0, 1001)[1:]
-props = {'rho0':1.e6*u.Msun/u.pc**3, 'rs':bs*u.kpc}
+props = {'Ml':1.e6*u.Msun, 'rs':bs*u.kpc}
 m = ConstDens(**props)
-exprops = {'M0':1.e8*u.Msun, 'rs':bs*u.kpc, 'rd':0.01*u.kpc}
+exprops = {'Ml':1.e8*u.Msun, 'rs':bs*u.kpc, 'rd':0.01*u.kpc}
 mexp = Exp(**exprops)
 
-gaussprops = {'M0':1.e6*u.Msun, 'rs':bs*u.kpc, 'R0':0.01*u.kpc}
+gaussprops = {'Ml':1.e6*u.Msun, 'rs':bs*u.kpc, 'R0':0.01*u.kpc}
 mgauss = Gaussian(**gaussprops)
 nn = 1e3
 

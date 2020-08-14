@@ -12,7 +12,8 @@ import numpy as np
 import pandas as pd
 
 from datetime import datetime
-from dmsl.convenience import flatten, prange
+from dmsl.convenience import flatten, prange, make_file_path
+from dmsl.paths import *
 from pymc3.backends.tracetab import trace_to_dataframe
 
 def paper_plot():
@@ -41,15 +42,30 @@ def plot_trace(trace, outpath):
     plt.savefig(outpath, dpi=100)
     print('{}: made {}'.format(datetime.now().isoformat(), outpath))
 
-def plot_emcee(flatchain, outpath):
+def plot_emcee(flatchain,nstars, nsamples,ndims, massprofiletype, kwargs):
+    for key in kwargs:
+        if key ==  'rs':
+            continue
+        outpath = make_file_path(RESULTSDIR, [nstars, nsamples,
+            ndims],extra_string=f'post_{massprofiletype}_{key}',
+            ext='.png')
+        plt.close('all')
+        paper_plot()
+        i = 0
+        if key == 'Ml': i  = 0
+        else: i = 1
+        up95 = np.percentile(flatchain[:,i],68)
+        fig = plt.figure()
+        plt.hist(flatchain[:, i], 50, color="k", histtype="step", density=True);
+        plt.axvline(up95)
+        plt.xlabel(f'$\\log_{10} {key}$');
+        plt.ylabel(f'$p({key})$');
+        savefig(fig, outpath, writepdf=0, dpi=100)
     plt.close('all')
-    paper_plot()
-    up95 = np.percentile(flatchain,68)
-    fig = plt.figure()
-    plt.hist(flatchain[:, 0], 50, color="k", histtype="step", density=True);
-    plt.axvline(up95)
-    plt.xlabel(r'$\log_{10} M_l$');
-    plt.ylabel(r'$p(M_l)$');
+    fig = corner.corner(flatchain)
+    outpath = make_file_path(RESULTSDIR, [nstars, nsamples,
+        ndims],extra_string=f'corner_{massprofiletype}',
+        ext='.png')
     savefig(fig, outpath, writepdf=0, dpi=100)
 
 def plot_chains(samples, outpath):

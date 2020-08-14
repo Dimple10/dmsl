@@ -36,13 +36,15 @@ class ConstDens(MassProfile):
     def __init__(self, **kwargs):
         super().__init__('constdens')
         self.kwargs = kwargs
+        self.params = ['Ml']
         self.nicename = 'Const.~Dens.'
         self.bs, self.profile = self.get_profile(**kwargs)
+        self.nparams = len(self.kwargs)
         self.get_mprime(self.bs, self.profile)
         self.get_mpprime(self.bs, self.mprime)
 
     def get_profile(self, **kwargs):
-        rho0 = kwargs['rho0']
+        rho0 = kwargs['Ml']/u.pc**3
         try:
             rs = kwargs['rs']
         except:
@@ -57,11 +59,12 @@ class Exp(MassProfile):
         self.kwargs = kwargs
         self.nicename = 'Exponential'
         self.bs, self.profile = self.get_profile(**kwargs)
+        self.nparams = len(self.kwargs)
         self.get_mprime(self.bs, self.profile)
         self.get_mpprime(self.bs, self.mprime)
 
     def get_profile(self, **kwargs):
-        m0 = kwargs['M0']
+        m0 = kwargs['Ml']
         rd = kwargs['rd']
         try:
             rs = kwargs['rs']
@@ -77,18 +80,19 @@ class Gaussian(MassProfile):
         self.kwargs = kwargs
         self.nicename = 'Gaussian'
         self.bs, self.profile = self.get_profile(**kwargs)
+        self.nparams = len(self.kwargs)
         self.get_mprime(self.bs, self.profile)
         self.get_mpprime(self.bs, self.mprime)
 
     def get_profile(self, **kwargs):
-        m0 = kwargs['M0']
+        m0 = kwargs['Ml']
         r0 = kwargs['R0']
         try:
             rs = kwargs['rs']
         except:
             rs = np.linspace(0, 1, 100)*u.kpc
         denom = 2.*np.sqrt(2)*np.pi**(1.5)*r0**3
-        rho = m0/denom*np.exp(-0.5*rs**2/r0**2)
+        rho = (m0/denom*np.exp(-0.5*rs**2/r0**2)).to(u.Msun/u.kpc**3)
         ## FIXME: can do this analytically.
         m = cumtrapz(rs, rho, initial=0.)
         return rs, m*u.Msun
