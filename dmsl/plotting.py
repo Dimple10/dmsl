@@ -5,11 +5,13 @@ Makes plots
 
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 import pymc3 as pm
 import seaborn as sns
 import corner
 import numpy as np
 import pandas as pd
+import scipy
 
 from datetime import datetime
 from dmsl.convenience import flatten, prange, make_file_path
@@ -33,6 +35,7 @@ def paper_plot():
             'legend.fontsize':12}
     plt.rcParams.update(figparams)
     cs = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    return cs
 
 def plot_trace(trace, outpath):
     fig = plt.figure(figsize=(7, 7))
@@ -86,6 +89,54 @@ def plot_logprob(samples, outpath):
     plt.ylabel(r'$\mid \log \mathcal{L} \mid$');
     plt.xlabel(r'N');
     savefig(fig, outpath, writepdf=0, dpi=100)
+
+def plot_sensitivity(flatchain, outpath):
+#     # Make a 2d normed histogram
+#     H,xedges,yedges=np.histogram2d(flatchain[:,0], flatchain[:,1],bins=40,normed=True)
+# 
+#     norm=H.sum() # Find the norm of the sum
+#     # Set contour levels
+#     contour1=0.99
+#     contour2=0.95
+#     contour3=0.68
+# 
+#     # Set target levels as percentage of norm
+#     target1 = norm*contour1
+#     target2 = norm*contour2
+#     target3 = norm*contour3
+# 
+#     # Take histogram bin membership as proportional to Likelihood
+#     # This is true when data comes from a Markovian process
+#     def objective(limit, target):
+#         w = np.where(H>limit)
+#         count = H[w]
+#         return count.sum() - target
+# 
+#     # Find levels by summing histogram to objective
+#     level1= scipy.optimize.bisect(objective, H.min(), H.max(), args=(target1,))
+#     level2= scipy.optimize.bisect(objective, H.min(), H.max(), args=(target2,))
+#     level3= scipy.optimize.bisect(objective, H.min(), H.max(), args=(target3,))
+# 
+#     # For nice contour shading with seaborn, define top level
+#     level4=H.max()
+#     levels=[level1,level2,level3,level4]
+    plt.close('all')
+    cs = paper_plot()
+    fig, ax = plt.subplots()
+    xs = np.linspace(0, 8, 100)
+    plt.plot(xs, 0.35*xs-2, c='black', label='Mishra-Sharma 95\% limit',
+            linewidth=2)
+    sns.kdeplot(flatchain[:,0], flatchain[:,1], ax=ax, shade=True,
+            n_levels=3, cmap='Blues_r')
+    # corner.hist2d(flatchain[:,0], flatchain[:,1], ax=ax, plot_datapoints=False,
+    #         plot_density=False, fill_contours=True, cmap=cm.Blues_r,
+    #             levels=[0.997])
+    fig.legend()
+    ax.set_xlim([0, 8])
+    ax.set_ylim([-3., 3.])
+    ax.set_xlabel(r'$\log_{10} M_l$');
+    ax.set_ylabel(r'$\log_{10} R~[\rm{pc}]$');
+    savefig(fig, outpath, writepdf=False, dpi=100)
 
 
 def plot_corner(trace, outpath):

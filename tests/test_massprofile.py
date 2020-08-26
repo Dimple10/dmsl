@@ -2,6 +2,7 @@ import numpy as np
 import astropy.units as u
 import astropy.constants as const
 import matplotlib.pyplot as plt
+import pandas as pd
 
 from dmsl.mass_profile import *
 from dmsl.plotting import paper_plot, savefig
@@ -27,16 +28,29 @@ def plot_massprofile(m_):
     savefig(f, figpath, writepdf=False)
 
 bs = np.logspace(-3, 0, 1001)[1:]
-props = {'rho0':1.e6*u.Msun/u.pc**3, 'rs':bs*u.kpc}
+props = {'Ml':1.e6*u.Msun, 'rs':bs*u.kpc}
 m = ConstDens(**props)
-exprops = {'M0':1.e8*u.Msun, 'rs':bs*u.kpc, 'rd':0.01*u.kpc}
+exprops = {'Ml':1.e8*u.Msun, 'rs':bs*u.kpc, 'rd':0.01*u.kpc}
 mexp = Exp(**exprops)
 
-gaussprops = {'M0':1.e6*u.Msun, 'rs':bs*u.kpc, 'R0':0.01*u.kpc}
+gaussprops = {'Ml':1.e6*u.Msun, 'rs':bs*u.kpc, 'R0':0.01*u.kpc}
 gauss = Gaussian(**gaussprops)
+
+
+## create a mass profile for file to test.
+r = np.logspace(-2,-1,1000)*u.kpc
+mr = (r/(0.01*u.kpc))**(-2.)
+res = np.array([r, mr]).T
+table = pd.DataFrame(res, columns=['r', 'm'])
+filepath = 'test_mr.dat'
+table.to_csv(filepath, index=False)
+
+kwargs = {'Ml': 1.e6*u.Msun, 'rs':bs*u.kpc}
+mfile = From_File(filepath, 'Test',**kwargs)
 
 plot_massprofile(mexp)
 plot_massprofile(gauss)
+plot_massprofile(mfile)
 
 alphapoint = lm.alphal_np(1.e8, bs, 300.)
 alphas = lm.alphal_np(None, bs, 300., btheta_=None, vltheta_=None, Mlprofile = m)
@@ -45,12 +59,15 @@ alphasexp = lm.alphal_np(None, bs, 300., btheta_=None, vltheta_=None,
 alphasgauss = lm.alphal_np(None, bs, 300., btheta_=None, vltheta_=None,
         Mlprofile = gauss)
 
+alphasfile = lm.alphal_np(None, bs, 300., btheta_=None, vltheta_=None,
+        Mlprofile = mfile)
 paper_plot()
 f = plt.figure()
 plt.plot(bs, alphapoint, c='black', label=r'$\rm{Point~Lens}$')
 plt.plot(bs, alphas, label=f'$\\rm {m.nicename}$')
 plt.plot(bs, alphasexp, label=f'$\\rm {mexp.nicename}$')
 plt.plot(bs, alphasgauss, label=f'$\\rm {gauss.nicename}$')
+plt.plot(bs, alphasfile, label=f'$\\rm {mfile.nicename}$')
 plt.legend()
 plt.yscale('log')
 plt.xscale('log')
@@ -63,8 +80,8 @@ savefig(f, figpath, writepdf=False)
 
 
 ## check peak in posterior i'm seeing
-props = {'rho0': 3.e2*u.Msun/u.pc**3, 'rs':bs*u.kpc}
-m = ConstDens(**props)
-alphas = lm.alphal_np(None, bs, 300., btheta_=None, vltheta_=None, Mlprofile = m)
-print(np.average(alphas))
-print(find_nlens_np(1.e2))
+# props = {'rho0': 3.e2*u.Msun/u.pc**3, 'rs':bs*u.kpc}
+# m = ConstDens(**props)
+# alphas = lm.alphal_np(None, bs, 300., btheta_=None, vltheta_=None, Mlprofile = m)
+# print(np.average(alphas))
+# print(find_nlens_np(1.e2))

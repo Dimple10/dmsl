@@ -59,7 +59,7 @@ class Sampler():
                 moves=[(emcee.moves.DEMove(), 0.8), (emcee.moves.DESnookerMove(), 0.2),])
         sampler.run_mcmc(p0, self.ntune+self.nsamples, progress=True)
 
-        samples = sampler.get_chain(discard=self.ntune)
+        samples = sampler.get_chain(discard=self.ntune, flat=True)
 
         ## save results
         pklpath = make_file_path(RESULTSDIR, [np.log10(self.nstars),
@@ -81,6 +81,10 @@ class Sampler():
             logradius = pars[1]
             if logradius < self.logradmin or logradius > self.logradmax:
                 return -np.inf
+            if len(pars) > 2:
+                logradius = pars[2]
+                if logradius < self.logradmin or logradius > self.logradmax:
+                    return -np.inf
         return 0.
 
     def lnlike(self,pars):
@@ -173,6 +177,15 @@ class Sampler():
             kwargs['Ml'] = 10**pars[0]*u.Msun
             kwargs['R0'] = 10**pars[1]*u.pc
             newmp = mp.Gaussian(**kwargs)
+        elif mptype == 'nfw':
+            kwargs['Ml'] = 10**pars[0]*u.Msun
+            kwargs['r0'] = 10**pars[1]*u.pc
+            newmp = mp.NFW(**kwargs)
+        elif mptype =='tnfw':
+            kwargs['Ml'] = 10**pars[0]*u.Msun
+            kwargs['r0'] = 10**pars[1]*u.pc
+            kwargs['rt'] = 10**pars[2]*u.pc
+            newmp = mp.TruncatedNFW(**kwargs)
         else:
             raise NotImplementedError("""Need to add this mass profile to
             sampler.""")
