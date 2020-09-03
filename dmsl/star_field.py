@@ -10,12 +10,14 @@ import pandas as pd
 from dmsl import __path__
 from dmsl.constants import *
 from dmsl.paths import *
+from dmsl.convenience import *
 
 
 class StarField():
 
-    def __init__(self,nstars=1000):
+    def __init__(self,survey, nstars=1000):
         self.nstars = nstars
+        self.survey = survey
 
         print('Making field...')
         self.make_field()
@@ -24,12 +26,14 @@ class StarField():
         print('All done making star field!')
 
     def make_field(self):
-        starpos = np.random.rand(self.nstars,2)*FOV
+        starpos = np.random.rand(self.nstars,2)*self.survey.fov_rad
         self.starpos = starpos
 
     def save_field(self):
         out = pd.DataFrame(self.starpos, columns=['x', 'y'])
-        outfile = STARPOSDIR+'nstars_'+str(int(np.log10(self.nstars)))+'.dat'
-        out.to_csv(outfile, index=False)
-        print("Wrote to {}".format(outfile))
+        fileinds = [np.log10(self.nstars)]
+        filepath = make_file_path(STARPOSDIR, fileinds, ext='.dat',
+                extra_string=f'nstars_{self.survey.name}')
+        out.to_csv(filepath, index=False)
+        print("Wrote to {}".format(filepath))
 

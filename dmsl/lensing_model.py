@@ -79,10 +79,10 @@ def make_xyvec(r, theta):
 
 
 
-def alphal_np(Ml_, b_, vl_, btheta_=None, vltheta_=None, Mlprofile = None):
+def alphal_np(Ml_, b_, vl_, dlens, btheta_=None, vltheta_=None, Mlprofile = None):
 
     if vltheta_ == None:
-        acc_units = (4*const.G*u.Msun*(1.*u.km/u.s)**2/const.c**2*1./(1.*u.kpc)**3).to(u.uas/u.yr**2,
+        acc_units = (4*const.G*u.Msun*(1.*u.km/u.s)**2/const.c**2*1./(dlens)**3).to(u.uas/u.yr**2,
                 equivalencies=u.dimensionless_angles())
         if Mlprofile == None:
             vec_part = np.linalg.norm(alphal_vec_exp_np(b_, vl_, 0., 0.), axis=0)
@@ -94,7 +94,7 @@ def alphal_np(Ml_, b_, vl_, btheta_=None, vltheta_=None, Mlprofile = None):
 
         return alphal
     else:
-        acc_units = (4*const.G*u.Msun*(1.*u.km/u.s)**2/const.c**2*1./(1.*u.kpc)**3).to(u.uas/u.yr**2,
+        acc_units = (4*const.G*u.Msun*(1.*u.km/u.s)**2/const.c**2*1./(dlens)**3).to(u.uas/u.yr**2,
                 equivalencies=u.dimensionless_angles())
         if Mlprofile == None:
             accmag = acc_units.value*Ml_

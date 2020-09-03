@@ -8,15 +8,19 @@ import pandas as pd
 
 from dmsl.paths import *
 from dmsl.constants import *
+from dmsl.convenience import *
 
 class AccelData():
 
-    def __init__(self, nstars=1000, ndims=1):
+    def __init__(self, survey,nstars=1000, ndims=1):
         if ndims == 2:
-            data = pd.DataFrame(np.random.randn(nstars,ndims)*WFIRST_SIGMA.value,
+            data = pd.DataFrame(np.random.randn(nstars,ndims)*survey.alphasigma.value,
                     columns=['a_x', 'a_y'])
         else:
-            data = pd.DataFrame(np.random.randn(nstars,ndims)*WFIRST_SIGMA.value,
+            data = pd.DataFrame(np.random.randn(nstars,ndims)*survey.alphasigma.value,
                     columns=['a'])
-        outfile = STARDATADIR+str(int(np.log10(nstars)))+'_'+str(ndims)+'.dat'
-        data.to_csv(outfile, index=False)
+        fileinds = [np.log10(nstars), ndims]
+        filepath = make_file_path(STARDATADIR, fileinds,
+                extra_string=f'{survey.name}',ext='.dat')
+        data.to_csv(filepath, index=False)
+        print("Wrote to {}".format(filepath))
