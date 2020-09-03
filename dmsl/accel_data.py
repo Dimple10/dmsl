@@ -19,7 +19,7 @@ class AccelData():
         else:
             data = pd.DataFrame(np.random.randn(nstars,ndims)*survey.alphasigma.value,
                     columns=['a'])
-        fileinds = [np.log10(nstars), ndims]
+        fileinds = [np.log10(nstars), ndims, survey.alphasigma.value]
         filepath = make_file_path(STARDATADIR, fileinds,
                 extra_string=f'{survey.name}',ext='.dat')
         data.to_csv(filepath, index=False)

@@ -155,7 +155,8 @@ class Sampler():
             self.starpos = pd.read_csv(filepath).to_numpy(dtype=np.float64)
     def load_data(self):
         ## loads data or makes if file not found.
-        fileinds = [np.log10(self.nstars), self.ndims]
+        fileinds = [np.log10(self.nstars), self.ndims,
+                self.survey.alphasigma.value]
         filepath = make_file_path(STARDATADIR, fileinds,
                 extra_string=f'{self.survey.name}',ext='.dat')
         if os.path.exists(filepath):
