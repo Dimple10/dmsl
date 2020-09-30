@@ -45,8 +45,9 @@ def plot_trace(trace, outpath):
     plt.savefig(outpath, dpi=100)
     print('{}: made {}'.format(datetime.now().isoformat(), outpath))
 
-def plot_emcee(flatchain,nstars, nsamples,ndims, massprofile, surveyname):
-    if massprofile is None:
+def plot_emcee(flatchain,nstars, nsamples,ndims, massprofile, surveyname,
+        usefraction):
+    if (massprofile is None):
         outpath = make_file_path(RESULTSDIR, [np.log10(nstars),
             np.log10(nsamples),
             ndims],extra_string=f'post_{surveyname}_point_Ml', ext='.png')
@@ -59,9 +60,25 @@ def plot_emcee(flatchain,nstars, nsamples,ndims, massprofile, surveyname):
         plt.xlabel(f'$\\log_{10} M_l$');
         plt.ylabel(f'$p(M_l)$');
         savefig(fig, outpath, writepdf=0, dpi=100)
+        if usefraction:
+            outpath = make_file_path(RESULTSDIR, [np.log10(nstars),
+                np.log10(nsamples),
+                ndims],extra_string=f'post_{surveyname}_point_f', ext='.png')
+            plt.close('all')
+            paper_plot()
+            up95 = np.percentile(flatchain[:,1],90)
+            fig = plt.figure()
+            plt.hist(flatchain[:, 1], 50, color="k", histtype="step", density=True);
+            plt.axvline(up95)
+            plt.xlabel(f'$f$');
+            plt.ylabel(f'$p(f)$');
+            savefig(fig, outpath, writepdf=0, dpi=100)
+
     else:
         massprofiletype = massprofile.type
         kwargs = massprofile.kwargs
+        if usefraction:
+            kwargs['f'] = 0
         for key in kwargs:
             if key ==  'rs':
                 continue
@@ -78,7 +95,10 @@ def plot_emcee(flatchain,nstars, nsamples,ndims, massprofile, surveyname):
             fig = plt.figure()
             plt.hist(flatchain[:, i], 50, color="k", histtype="step", density=True);
             plt.axvline(up95)
-            plt.xlabel(f'$\\log_{10} {key}$');
+            if key == 'f':
+                plt.xlabel(r'$f$');
+            else:
+                plt.xlabel(f'$\\log_{10} {key}$');
             plt.ylabel(f'$p({key})$');
             savefig(fig, outpath, writepdf=0, dpi=100)
         plt.close('all')
@@ -155,6 +175,24 @@ def plot_sensitivity(flatchain, outpath):
     ax.set_ylabel(r'$\log_{10} R~[\rm{pc}]$');
     savefig(fig, outpath, writepdf=False, dpi=100)
 
+def make_histogram(data,bins, data_name, outpath):
+    plt.close('all')
+    cs = paper_plot()
+    f = plt.figure()
+    plt.hist(data, bins=bins, histtype='step', linewidth=3)
+    plt.xlabel(f'${data_name}$')
+    plt.ylabel('$N$')
+    savefig(f, outpath, writepdf=False, dpi=100)
+
+def make_scatter(x,y,axislabels, outpath):
+    size = int(20*(len(x)/1000)**(-1))
+    plt.close('all')
+    cs = paper_plot()
+    f = plt.figure()
+    plt.scatter(x,y, s=size)
+    plt.xlabel(f'${axislabels[0]}$')
+    plt.ylabel(f'${axislabels[1]}$')
+    savefig(f, outpath, writepdf=False, dpi=100)
 
 def plot_corner(trace, outpath):
     # corner plot of posterior samples
@@ -225,27 +263,34 @@ def savefig(fig, figpath, writepdf=True, dpi=450):
 
     plt.close('all')
 
-def plot_lens_vector_field(x,y,lensx, lensy, outpath):
+def plot_lens_vector_field(x,y,lensx, lensy, rs_arcsec, outpath):
     ## use a weird symlog because lensx, lensy < 1.
-    symlog = lambda x:(np.sign(x)*np.log10(np.abs(x)))**(-1)
-    prange(lensx)
-    prange(lensy)
-    M = np.log10(np.sqrt(lensy**2+lensx**2))
-    norm = matplotlib.colors.Normalize()
-    norm.autoscale(M)
+    magnorm = np.sqrt(lensx**2+lensy**2)
+    norm = matplotlib.colors.LogNorm(vmin=magnorm[np.nonzero(magnorm)].min(), vmax=magnorm.max())
     cm = matplotlib.cm.Blues
     sm = matplotlib.cm.ScalarMappable(cmap=cm, norm=norm)
     sm.set_array([])
     plt.close('all')
     paper_plot()
     fig1, ax1 = plt.subplots()
-    Q = ax1.quiver(x/3600.,y/3600.,symlog(lensx), symlog(lensy), color=cm(norm(M)),
-            pivot='mid', units='inches', scale=5./1.)
-    plt.annotate('', xy=(-0.5, -0.4), xytext=(-0.5, -0.5),
-            arrowprops=dict(facecolor='black', shrink=0.05))
-    plt.text(-0.48, -0.46,r'$v_l$', fontsize=20)
+    ax1.set_aspect('equal')
+    Q = ax1.quiver(x/rs_arcsec,y/rs_arcsec,lensx/magnorm, lensy/magnorm,
+            color=cm(norm(magnorm)), pivot='mid', units='width', scale=3./1.,
+            scale_units='xy')
+#    plt.annotate('', xy=(-0.5, -0.4), xytext=(-0.5, -0.5),
+#            arrowprops=dict(facecolor='black', shrink=0.05))
+    #plt.text(-0.48, -0.46,r'$v_l$', fontsize=20)
+    circle1 = plt.Circle((0, 0), 1., color='k', fill=False,
+            linewidth=0.5)
+    ax1.add_artist(circle1)
+    circle2 = plt.Circle((0, 0), 2., color='k', fill=False,
+            linewidth=0.5)
+    ax1.add_artist(circle2)
+    circle3 = plt.Circle((0, 0), 3., color='k', fill=False,
+            linewidth=0.5)
+    ax1.add_artist(circle3)
     plt.scatter(0.0,0.0, marker='x',color='black', s=36)
-    plt.colorbar(sm, label=r'$\log_{10}\|\alpha\|~[\mu \rm{as/yr}^2]$')
-    plt.xlabel(r'$\rm{X}~[\rm{arcmin}]$')
-    plt.ylabel(r'$\rm{Y}~[\rm{arcmin}]$')
+    plt.colorbar(sm, label=r'$\|\alpha\|~[\mu\rm{as/yr}^2]$')
+    plt.xlabel(r'$b_x/r_s$')
+    plt.ylabel(r'$b_y/r_s$')
     savefig(fig1, outpath, writepdf=False)

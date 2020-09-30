@@ -3,6 +3,7 @@ Constants used in project
 '''
 import astropy.units as u
 import numpy as np
+from astropy.cosmology import WMAP9 as cosmo
 ### ---
 FB_BINS = 10
 DSTARS = 8.*u.kpc
@@ -19,5 +20,4 @@ LENS_FOV = (FOV*DLENS).to(u.kpc)
 RHO_DM = (0.008*u.Msun/u.pc**3).to(u.Msun/u.kpc**3) ## Bovy+Tremaine 2012 
 MASS_MWCORE = 4.5e9*u.Msun ## from BT Table 1.2 I think...NEED TO FIX TO VARY WITH RADIUS.
 RD_MW = 2.*u.kpc ## BT p.12
-WFIRST_SIGMA = 0.1*u.uas/u.yr**2 ## from mishra-sharma 2020; average/star over 10 years.
-#WFIRST_SIGMA = 100*u.uas/u.yr**2 ## trying for Gaia DR 2.. \sigma_\mu = 0.2mas/yr over 22 months ~ 2 years
+RHO_CRIT = cosmo.critical_density(0.)

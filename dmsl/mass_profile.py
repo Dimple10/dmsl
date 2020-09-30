@@ -11,6 +11,8 @@ import pandas as pd
 from scipy.integrate import cumtrapz
 from scipy.interpolate import UnivariateSpline
 
+from dmsl.constants import RHO_CRIT
+
 class MassProfile:
 
     def __init__(self, profiletype, **kwargs):
@@ -106,21 +108,83 @@ class NFW(MassProfile):
         self.nicename = 'NFW'
         self.bs, self.profile = self.get_profile(**kwargs)
         self.nparams = len(self.kwargs)
-        self.get_mprime(self.bs, self.profile)
-        self.get_mpprime(self.bs, self.mprime)
+        self.get_mprime(self.bs, self.rhos, self.rs)
+        self.get_mpprime(self.bs, self.rhos, self.rs)
 
     def get_profile(self, **kwargs):
-        m0 = kwargs['Ml']
-        r0 = kwargs['r0']
-        rho0 = (m0/(4*np.pi*r0**3)).to(u.Msun/u.kpc**3)
+        M200= kwargs['Ml']
+        #rs = kwargs['rs']
         try:
-            rs = kwargs['rs']
+            r = kwargs['rarray']
         except:
-            rs = np.linspace(0, 1, 100)*u.kpc
-        term1 = np.log(1.+rs/r0)
-        term2 = -1*rs/r0/(1+rs/r0)
-        mr = m0*(term1 + term2)
-        return rs, mr.to(u.Msun)
+            raise ValueError("Need to specify r array for profile")
+
+        try:
+            c200 = kwargs['c200']
+        except:
+            print("Setting concentration to MW value")
+            c200 = 13. ## MW value
+            kwargs['c200'] = c200
+        delta_c = (200 / 3.) * c200 ** 3 / (np.log(1 + c200) - c200 / (1 + c200))
+        rhos = RHO_CRIT * delta_c
+        rs = (M200 / ((4 / 3.) * np.pi * c200 ** 3 * 200 * RHO_CRIT)) ** (1 / 3.)  # NFW scale radius
+        self.rhos = rhos
+        self.rs = rs
+        x = (r / rs).to('').value
+        mr = 4 * np.pi * rhos * rs ** 3 * (np.log(x / 2.) + self.F(x))
+        return r, mr.to(u.Msun)
+
+    def M(self, r):
+        x = r.value / self.rs.value
+        M = 4 * np.pi * self.rhos * self.rs ** 3 * (np.log(x / 2.) + self.F(x))
+        return M.to(u.Msun)
+    ##### next few functions stolen from mishra sharma
+    def F(self, x):
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(
+                x == 1.0,
+                1.0,
+                np.where(x <= 1.0, np.arctanh(np.sqrt(1.0 - x ** 2)) / (np.sqrt(1.0 - x ** 2)),
+                         np.arctan(np.sqrt(x ** 2 - 1.0)) / (np.sqrt(x ** 2 - 1.0))),
+            )
+    def dFdx(self, x):
+        """ Helper function for NFW deflection, from astro-ph/0102341 eq. (49)
+        """
+        return (1 - x ** 2 * self.F(x)) / (x * (x ** 2 - 1))
+
+    def d2Fdx2(self, x):
+        """ Helper function for NFW deflection, derivative of dFdx
+        """
+        return (1 - 3 * x ** 2 + (x ** 2 + x ** 4) * self.F(x) + (x ** 3 - x**5)
+                * self.dFdx(x)) / ( x ** 2 * (-1 + x ** 2) ** 2)
+
+    def get_mprime(self,r, rhos, rs):
+        num = 16.*np.pi*rhos*rs*r
+        denom = (1. + r/rs)**2
+        x = r.value / rs.value
+        dMdb = 4 * np.pi * rhos * rs ** 2 * ((1 / x) + self.dFdx(x))
+        self.mprime = num/denom
+        return self.mprime
+
+    def mprime_func(self, r):
+        x = r.value / self.rs.value
+        dMdb = 4 * np.pi * self.rhos * self.rs ** 2 * ((1 / x) + self.dFdx(x))
+        print(self.rhos, self.rs, self.dFdx(x))
+        print(dMdb)
+        return dMdb.to(u.Msun/u.kpc)
+
+    def get_mpprime(self, r, rhos, rs):
+        num = 16*np.pi*rhos*rs**3*(rs-r)
+        denom = (r+rs)**3
+        x = r.value / rs.value
+        d2Mdb2 = 4 * np.pi * rs * rhos * (-1 / x ** 2 + self.d2Fdx2(x))
+        self.mpprime = num/denom
+        return self.mpprime
+
+    def mpprime_func(self, r):
+        x = r.value / self.rs.value
+        d2Mdb2 = 4 * np.pi * self.rs * self.rhos * (-1 / x ** 2 + self.d2Fdx2(x))
+        return d2Mdb2.to(u.Msun/u.kpc**2)
 
 class TruncatedNFW(MassProfile):
 

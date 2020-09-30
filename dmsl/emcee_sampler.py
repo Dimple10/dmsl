@@ -26,7 +26,7 @@ class Sampler():
     def __init__(self, nstars=1000, nbsamples=100, nsamples=1000, nchains=8,
             ntune=1000, ndims=1, nblog10Ml=3, minlogMl=np.log10(1e0),
             maxlogMl=np.log10(1e8), minlogb =-15., maxlogb = 1.,
-            MassProfile=None, survey=None, overwrite=True):
+            MassProfile=None, survey=None, overwrite=True, usefraction=False):
         self.nstars=nstars
         self.nbsamples=nbsamples
         self.nblog10Ml=nblog10Ml
@@ -41,6 +41,8 @@ class Sampler():
         self.massprofile = MassProfile
         self.logradmax = 3.5 #pc
         self.logradmin = -3
+        self.overwrite = overwrite
+        self.usefraction = usefraction
         if survey is None:
             self.survey = Roman()
         else:
@@ -49,17 +51,20 @@ class Sampler():
         self.load_starpos()
         self.load_data()
         self.run_inference()
-        if self.overwrite()
+        if self.overwrite:
             self.make_diagnostic_plots()
 
     def run_inference(self):
         npar, nwalkers = self.ndims, self.nchains
         if self.massprofile is not None:
             npar += self.massprofile.nparams - 2
+        if self.usefraction:
+            npar += 1
         p0 = np.random.rand(nwalkers, npar)*(self.maxlogMl-self.minlogMl)+self.minlogMl
         if self.massprofile is not None:
             p0[:, 1] = np.random.rand(nwalkers)**(self.logradmax-self.logradmin) + self.logradmin
-        #p0 = np.random.rand(nwalkers, npar)*1.0+self.minlogMl+2.
+        if self.usefraction:
+            p0[:, -1] = np.random.rand(nwalkers)
 
         sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike,
                 moves=[(emcee.moves.DEMove(), 0.8), (emcee.moves.DESnookerMove(), 0.2),])
@@ -92,12 +97,14 @@ class Sampler():
         log10Ml = pars[0]
         if (log10Ml < self.minlogMl) or (log10Ml>self.maxlogMl):
             return -np.inf
-        if len(pars) > 1:
-            logradius = pars[1]
-            if logradius < self.logradmin or logradius > self.logradmax:
+        if self.usefraction:
+            frac = pars[-1]
+            if (frac < 0) or (frac>10):
                 return -np.inf
-            if len(pars) > 2:
-                logradius = pars[2]
+        if self.massprofile is not None:
+            modelpars = self.massprofile.nparams - 2
+            for i in range(0, modelpars):
+                logradius = pars[i+1]
                 if logradius < self.logradmin or logradius > self.logradmax:
                     return -np.inf
         return 0.
@@ -109,15 +116,20 @@ class Sampler():
             newmassprofile = self.make_new_mass(pars)
         else:
             newmassprofile = None
+        if self.usefraction:
+            f = pars[-1]
+        else:
+            f = 1.
         log10Ml = pars[0]
         Ml = 10**log10Ml
-        nlens = int(find_nlens_np(Ml))
+        nlens = int(np.ceil(f*find_nlens_np(Ml)))
+        nlens = 1
         FOV = self.survey.fov_rad
         x= pm.Triangular.dist(lower=0, upper=FOV,c=FOV/2.).random(size=nlens)
         y= pm.Triangular.dist(lower=0, upper=FOV,c=FOV/2.).random(size=nlens)
         lenspos = np.vstack([x,y]).T
         dists = distance.cdist(lenspos, self.starpos)
-        beff = np.sum(dists, axis=0)
+        beff = np.min(dists, axis=0)
         vl = pm.TruncatedNormal.dist(mu=0., sigma=220, lower=0,
                         upper=550.).random(1)
         if self.ndims==2:
@@ -129,15 +141,6 @@ class Sampler():
 
         alphal = lm.alphal_np(Ml, beff, vl, self.survey.maxdlens,btheta_=bstheta, vltheta_=vltheta,
                 Mlprofile=newmassprofile)
-        ## background signal
-        ##rmw = pm.Exponential.dist(lam=1./RD_MW.value).random()
-        ##if self.ndims==2:
-        ##     rmwtheta = pm.Uniform(name='rmwtheta', lower=0.299,
-        ##             upper=1.272) ## see test_angles.py in tests.
-        ## else:
-        ##     rmwtheta = None
-
-        #alphab = bm.alphab(rmw,rtheta_=rmwtheta)
 
         diff = alphal - self.data
         chisq = np.sum(diff**2/(self.survey.alphasigma.value**2+self.sigalphab.value**2))
@@ -145,31 +148,31 @@ class Sampler():
 
     def load_starpos(self):
         ## loads data or makes if file not found.
-        fileinds = [np.log10(self.nstars)]
-        filepath = make_file_path(STARPOSDIR, fileinds, ext='.dat',
-                extra_string=f'nstars_{self.survey.name}')
-        if os.path.exists(filepath):
-            self.starpos = pd.read_csv(filepath).to_numpy()
-        else:
-            StarField(self.survey, nstars=self.nstars)
-            self.starpos = pd.read_csv(filepath).to_numpy(dtype=np.float64)
+        print('Making star field')
+#        fileinds = [np.log10(self.nstars)]
+#        filepath = make_file_path(STARPOSDIR, fileinds, ext='.dat',
+#                extra_string=f'nstars_{self.survey.name}')
+#        if os.path.exists(filepath):
+#            self.starpos = pd.read_csv(filepath).to_numpy()
+        self.starpos = StarField(self.survey, nstars=self.nstars).starpos
+
     def load_data(self):
+        print('Creating data vector')
         ## loads data or makes if file not found.
-        fileinds = [np.log10(self.nstars), self.ndims,
-                self.survey.alphasigma.value]
-        filepath = make_file_path(STARDATADIR, fileinds,
-                extra_string=f'{self.survey.name}',ext='.dat')
-        if os.path.exists(filepath):
-            self.data = pd.read_csv(filepath).to_numpy()
-        else:
-            AccelData(self.survey, nstars=self.nstars, ndims=self.ndims)
-            self.data = pd.read_csv(filepath).to_numpy(dtype=np.float64)
+#        fileinds = [np.log10(self.nstars), self.ndims,
+#                self.survey.alphasigma.value]
+#        filepath = make_file_path(STARDATADIR, fileinds,
+#                extra_string=f'{self.survey.name}',ext='.dat')
+#        if os.path.exists(filepath):
+#            self.data = pd.read_csv(filepath).to_numpy()
+        self.data = AccelData(self.survey, nstars=self.nstars,
+                ndims=self.ndims).data.to_numpy()
 
     def make_diagnostic_plots(self):
         ##FIXME: should also thin out samples by half the autocorr time.
         plot.plot_emcee(self.sampler.get_chain(flat=True, discard=self.ntune),
                 self.nstars, self.nsamples,self.ndims, self.massprofile,
-                self.survey.name)
+                self.survey.name, self.usefraction)
         if self.massprofile is not None:
             outpath = make_file_path(RESULTSDIR, [np.log10(self.nstars),
                 np.log10(self.nsamples), self.ndims],
