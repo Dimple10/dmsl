@@ -19,20 +19,44 @@ class MassProfile:
         self.type = profiletype
         self.kwargs = kwargs
 
-    def get_profile(self):
+    def M(self):
         raise NotImplementedError("""Woops! You need to specify an actual halo
         type before you can get the mass profile!""")
         pass
 
-    def get_mprime(self, bs, profile):
+    def Mprime(self, bs, profile):
         mprime = np.gradient(profile, bs, edge_order=2)
         self.mprime = mprime
         return mprime
 
-    def get_mpprime(self, bs, mprime):
+    def Mpprime(self, bs, mprime):
         mpprime = np.gradient(mprime, bs, edge_order=2)
         self.mpprime = mpprime
         return mpprime
+
+class PointSource(MassProfile):
+
+    def __init__(self, **kwargs):
+        super().__init__('pointsource')
+        self.kwargs = kwargs
+        self.params = ['Ml']
+        self.nicename = 'Point~Source'
+        self.nparams = len(self.kwargs)
+
+    def M(self, b):
+        try:
+            return self.kwargs['Ml']* np.ones((len(b)))
+        except:
+            return self.kwargs['Ml']
+
+    def Mprime(self, b):
+        try:
+            return np.zeros((len(b))) * self.Ml.unit / b.unit
+        except:
+            return 0. * self.kwargs['Ml'] / b.unit
+
+    def Mpprime(self, b):
+        return self.Mprime(b) * 1. / b.unit
 
 class ConstDens(MassProfile):
 
@@ -41,21 +65,16 @@ class ConstDens(MassProfile):
         self.kwargs = kwargs
         self.params = ['Ml']
         self.nicename = 'Const.~Dens.'
-        self.bs, self.profile = self.get_profile(**kwargs)
         self.nparams = len(self.kwargs)
-        self.get_mprime(self.bs, self.profile)
-        self.get_mpprime(self.bs, self.mprime)
 
-    def get_profile(self, **kwargs):
-        rho0 = kwargs['Ml']/u.pc**3
-        try:
-            rs = kwargs['rs']
-        except:
-            rs = np.linspace(0, 1, 100)*u.kpc
-        m = 4./3.*np.pi*rho0*rs**3
-        return rs, m.to(u.Msun)
+    def M(self, b):
+        ## FIXME: should be enclosed cylindrical mass
+        self.rho0 = kwargs['Ml'] / u.pc**3
+        m = 4./3.*np.pi*self.rho0*b**3
+        return m.to(u.Msun)
 
 class Exp(MassProfile):
+    ## FIXME: needs to be updated
 
     def __init__(self, **kwargs):
         super().__init__('exp')
@@ -77,7 +96,7 @@ class Exp(MassProfile):
         return rs, m.to(u.Msun)
 
 class Gaussian(MassProfile):
-
+    ## FIXME: should be updated to new formalism.
     def __init__(self, **kwargs):
         super().__init__('gaussian')
         self.kwargs = kwargs
@@ -106,40 +125,42 @@ class NFW(MassProfile):
         super().__init__('nfw')
         self.kwargs = kwargs
         self.nicename = 'NFW'
-        self.bs, self.profile = self.get_profile(**kwargs)
         self.nparams = len(self.kwargs)
-        self.get_mprime(self.bs, self.rhos, self.rs)
-        self.get_mpprime(self.bs, self.rhos, self.rs)
+        self.M(1.*u.kpc) ## use this to get rs and rhos
 
-    def get_profile(self, **kwargs):
-        M200= kwargs['Ml']
-        #rs = kwargs['rs']
+    def M(self, b):
+        M200 = self.kwargs['Ml']
         try:
-            r = kwargs['rarray']
-        except:
-            raise ValueError("Need to specify r array for profile")
-
-        try:
-            c200 = kwargs['c200']
+            c200 = self.kwargs['c200']
         except:
             print("Setting concentration to MW value")
             c200 = 13. ## MW value
-            kwargs['c200'] = c200
-        delta_c = (200 / 3.) * c200 ** 3 / (np.log(1 + c200) - c200 / (1 + c200))
+            self.kwargs['c200'] = c200
+        delta_c = (200 / 3.) * c200**3 / (np.log(1 + c200) - c200 / (1 + c200))
         rhos = RHO_CRIT * delta_c
-        rs = (M200 / ((4 / 3.) * np.pi * c200 ** 3 * 200 * RHO_CRIT)) ** (1 / 3.)  # NFW scale radius
-        self.rhos = rhos
-        self.rs = rs
-        x = (r / rs).to('').value
-        mr = 4 * np.pi * rhos * rs ** 3 * (np.log(x / 2.) + self.F(x))
-        return r, mr.to(u.Msun)
+        rs = (M200 / ((4 / 3.) * np.pi * c200**3 * 200 * RHO_CRIT))**(1 / 3.)
+        self.rhos = rhos.to( u.Msun / u.kpc**3 )
+        self.rs = rs.to( u.kpc )
+        self.delta_c = delta_c
+        x = ( b / rs ).to('').value
+        Mr = 4. * np.pi * rhos * rs**3 * ( np.log( x / 2. ) + self.F(x) )
+        return Mr.to(u.Msun)
 
-    def M(self, r):
-        x = r.value / self.rs.value
-        M = 4 * np.pi * self.rhos * self.rs ** 3 * (np.log(x / 2.) + self.F(x))
-        return M.to(u.Msun)
-    ##### next few functions stolen from mishra sharma
+    def Mprime(self, b):
+        x = ( b / self.rs ).to('').value
+        mlprime = 4. * np.pi * self.rhos * self.rs**2 * ( (1. / x) + self.dFdx(x) )
+        return mlprime.to( u.Msun / u.kpc )
+
+    def Mpprime(self, b):
+        x = ( b / self.rs ).to('').value
+        mlpprime = 4 * np.pi * self.rs * self.rhos * ( (-1. / x**2) + self.d2Fdx2(x) )
+        return mlpprime.to( u.Msun / u.kpc**2 )
+
     def F(self, x):
+        '''
+        Helper function for NFW profile.
+        shamelessly stolen from @smsharma/astrometry-lensing-corrections
+        '''
         with np.errstate(divide="ignore", invalid="ignore"):
             return np.where(
                 x == 1.0,
@@ -148,45 +169,34 @@ class NFW(MassProfile):
                          np.arctan(np.sqrt(x ** 2 - 1.0)) / (np.sqrt(x ** 2 - 1.0))),
             )
     def dFdx(self, x):
-        """ Helper function for NFW deflection, from astro-ph/0102341 eq. (49)
-        """
-        return (1 - x ** 2 * self.F(x)) / (x * (x ** 2 - 1))
+        '''
+        First derivative of helper function for NFW profile.
+        with inspiration from @smsharma/astrometry-lensing-corrections
+        '''
+        ##FIXME : x=1 case not quite right.
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(
+                x == 1.0,
+                0.0,
+                (1 - x ** 2 * self.F(x)) / (x * (x ** 2 - 1))
+                )
 
     def d2Fdx2(self, x):
-        """ Helper function for NFW deflection, derivative of dFdx
-        """
-        return (1 - 3 * x ** 2 + (x ** 2 + x ** 4) * self.F(x) + (x ** 3 - x**5)
-                * self.dFdx(x)) / ( x ** 2 * (-1 + x ** 2) ** 2)
-
-    def get_mprime(self,r, rhos, rs):
-        num = 16.*np.pi*rhos*rs*r
-        denom = (1. + r/rs)**2
-        x = r.value / rs.value
-        dMdb = 4 * np.pi * rhos * rs ** 2 * ((1 / x) + self.dFdx(x))
-        self.mprime = num/denom
-        return self.mprime
-
-    def mprime_func(self, r):
-        x = r.value / self.rs.value
-        dMdb = 4 * np.pi * self.rhos * self.rs ** 2 * ((1 / x) + self.dFdx(x))
-        print(self.rhos, self.rs, self.dFdx(x))
-        print(dMdb)
-        return dMdb.to(u.Msun/u.kpc)
-
-    def get_mpprime(self, r, rhos, rs):
-        num = 16*np.pi*rhos*rs**3*(rs-r)
-        denom = (r+rs)**3
-        x = r.value / rs.value
-        d2Mdb2 = 4 * np.pi * rs * rhos * (-1 / x ** 2 + self.d2Fdx2(x))
-        self.mpprime = num/denom
-        return self.mpprime
-
-    def mpprime_func(self, r):
-        x = r.value / self.rs.value
-        d2Mdb2 = 4 * np.pi * self.rs * self.rhos * (-1 / x ** 2 + self.d2Fdx2(x))
-        return d2Mdb2.to(u.Msun/u.kpc**2)
+        '''
+        Second derivative of helper function for NFW profile.
+        with inspiration from @smsharma/astrometry-lensing-corrections
+        '''
+        ##FIXME : x=1 case not quite right.
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(
+                x == 1.0,
+                0.0,
+                (1 - 3 * x ** 2 + (x ** 2 + x ** 4) * self.F(x) + (x ** 3 - x**5)
+                    * self.dFdx(x)) / ( x ** 2 * (-1 + x ** 2) ** 2)
+                )
 
 class TruncatedNFW(MassProfile):
+    ## FIXME : update class.
 
     def __init__(self, **kwargs):
         super().__init__('tnfw')
@@ -213,7 +223,7 @@ class TruncatedNFW(MassProfile):
         return rs, mr*u.Msun
 
 class Compact(MassProfile):
-
+    ## FIXME
     def __init__(self):
         super().__init__('compact')
         self.kwargs = kwargs
@@ -235,6 +245,7 @@ class Compact(MassProfile):
 
 
 class From_File(MassProfile):
+    ## FIXME
 
     def __init__(self,filename,name,**kwargs):
         super().__init__('file')
