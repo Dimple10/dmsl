@@ -37,7 +37,7 @@ class MassProfile:
 class PointSource(MassProfile):
 
     def __init__(self, **kwargs):
-        super().__init__('pointsource')
+        super().__init__('ps')
         self.kwargs = kwargs
         self.params = ['Ml']
         self.nicename = 'Point~Source'
@@ -101,23 +101,28 @@ class Gaussian(MassProfile):
         super().__init__('gaussian')
         self.kwargs = kwargs
         self.nicename = 'Gaussian'
-        self.bs, self.profile = self.get_profile(**kwargs)
         self.nparams = len(self.kwargs)
-        self.get_mprime(self.bs, self.profile)
-        self.get_mpprime(self.bs, self.mprime)
+        self.M(1.*u.kpc)
 
-    def get_profile(self, **kwargs):
-        m0 = kwargs['Ml']
-        r0 = kwargs['R0']
-        try:
-            rs = kwargs['rs']
-        except:
-            rs = np.linspace(0, 1, 100)*u.kpc
+    def M(self, b):
+        m0 = self.kwargs['Ml']
+        r0 = self.kwargs['R0']
         denom = 2.*np.sqrt(2)*np.pi**(1.5)*r0**3
-        rho = (m0/denom*np.exp(-0.5*rs**2/r0**2)).to(u.Msun/u.kpc**3)
-        ## FIXME: can do this analytically.
-        m = cumtrapz(rs, rho, initial=0.)
-        return rs, m*u.Msun
+        m = m0 * (1 - np.exp(-b ** 2 / (2 * r0 ** 2)))
+        return m.to(u.Msun)
+
+    def Mprime(self, b):
+        m0 = self.kwargs['Ml']
+        r0 = self.kwargs['R0']
+        mp = (m0 * b / r0 ** 2) * np.exp(-b ** 2 / (2 * r0 ** 2))
+        return mp.to(u.Msun/u.kpc)
+
+    def Mpprime(self, b):
+        m0 = self.kwargs['Ml']
+        r0 = self.kwargs['R0']
+        mpp = m0 * (-((b ** 2 * np.exp(-(b ** 2 / (2 * r0 ** 2)))) / r0 ** 4) + np.exp(
+            -(b ** 2 / (2 * r0 ** 2))) / r0 ** 2)
+        return mpp.to(u.Msun/u.kpc**2)
 
 class NFW(MassProfile):
 
@@ -174,12 +179,13 @@ class NFW(MassProfile):
         with inspiration from @smsharma/astrometry-lensing-corrections
         '''
         ##FIXME : x=1 case not quite right.
-        with np.errstate(divide="ignore", invalid="ignore"):
-            return np.where(
-                x == 1.0,
-                0.0,
-                (1 - x ** 2 * self.F(x)) / (x * (x ** 2 - 1))
-                )
+        #with np.errstate(divide="ignore", invalid="ignore"):
+        #    return np.where(
+        #        x == 1.0,
+        #        0.0,
+        #        (1 - x ** 2 * self.F(x)) / (x * (x ** 2 - 1))
+        #        )
+        return (1 - x ** 2 * self.F(x)) / (x * (x ** 2 - 1))
 
     def d2Fdx2(self, x):
         '''
@@ -187,13 +193,15 @@ class NFW(MassProfile):
         with inspiration from @smsharma/astrometry-lensing-corrections
         '''
         ##FIXME : x=1 case not quite right.
-        with np.errstate(divide="ignore", invalid="ignore"):
-            return np.where(
-                x == 1.0,
-                0.0,
-                (1 - 3 * x ** 2 + (x ** 2 + x ** 4) * self.F(x) + (x ** 3 - x**5)
-                    * self.dFdx(x)) / ( x ** 2 * (-1 + x ** 2) ** 2)
-                )
+       # with np.errstate(divide="ignore", invalid="ignore"):
+       #     return np.where(
+       #         x == 1.0,
+       #         0.0,
+       #         (1 - 3 * x ** 2 + (x ** 2 + x ** 4) * self.F(x) + (x ** 3 - x**5)
+       #             * self.dFdx(x)) / ( x ** 2 * (-1 + x ** 2) ** 2)
+       #         )
+        return (1 - 3 * x ** 2 + (x ** 2 + x ** 4) * self.F(x) + (x ** 3 -
+            x**5) * self.dFdx(x)) / ( x ** 2 * (-1 + x ** 2) ** 2)
 
 class TruncatedNFW(MassProfile):
     ## FIXME : update class.

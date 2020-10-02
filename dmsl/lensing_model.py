@@ -46,7 +46,10 @@ def alphal_vec(Ml, bvec, vvec, vdotvec = None):
     bunit = bvec / b
     v = np.linalg.norm(vvec)
     vunit = vvec / v
-    bdotv = np.dot(bunit,vunit)
+    if bunit.ndim == 1:
+        bdotv = np.dot(bunit, vunit)
+    else:
+        bdotv = np.einsum('ij, ij-> i', bunit, vunit).reshape(-1,1)
     ## A(b) term
     Aterm1 = -8. * (bdotv)**2 * bunit
     Aterm2 = 0.
@@ -70,7 +73,7 @@ def alphal_vec(Ml, bvec, vvec, vdotvec = None):
         Bterm3 += -1. * (np.dot(bunit, vdotunit)) * bunit
     Bterm = Bterm1 + Bterm2 + Bterm3 + Bterm4
     ## C(b) term
-    Cterm = (bdotv)**2 * bunit
+    Cterm = -1. * (bdotv)**2 * bunit
     ## Put it all together, make each term unitless
     Term1 = Aterm
     Term2 = Ml.Mprime(b) / Ml.M(b) * b * Bterm

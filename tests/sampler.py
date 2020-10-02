@@ -8,30 +8,22 @@ from dmsl.emcee_sampler import *
 import datetime
 from dmsl.mass_profile import *
 
-bs = np.logspace(-3, 0, 1001)[1:]
 
-props = {'Ml':1.e6*u.Msun, 'rs':bs*u.kpc}
-m = ConstDens(**props)
 
-exprops = {'Ml':1.e8*u.Msun, 'rs':bs*u.kpc, 'rd':0.01*u.kpc}
-mexp = Exp(**exprops)
-
-gaussprops = {'Ml':1.e6*u.Msun, 'rs':bs*u.kpc, 'R0':0.01*u.kpc}
-mgauss = Gaussian(**gaussprops)
-
-nfwprops = {'Ml':1.e6*u.Msun, 'rs':bs*u.kpc, 'r0':0.01*u.kpc}
+nfwprops = {'Ml':1.e6*u.Msun}
 mnfw = NFW(**nfwprops)
 
-tnfwprops = {'Ml':1.e6*u.Msun, 'rs':bs*u.kpc, 'r0':0.01*u.kpc, 'rt':1*u.kpc}
-mtnfw = TruncatedNFW(**tnfwprops)
+ps = PointSource(**{'Ml':1.e7*u.Msun})
 
+gausprops = {'Ml':1.e6*u.Msun, 'R0':1.e3*u.pc}
+mgauss = Gaussian(**gausprops)
 
 nn = 1e3
 
 time1 = datetime.datetime.now()
 #print('First let`s do a short run with only magnitude of the acceleration.')
 s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e3),
-        MassProfile=None, usefraction=True)
+        MassProfile=mgauss, usefraction=False)
 print('This took',str(datetime.datetime.now()-time1))
 
 

@@ -27,9 +27,9 @@ def paper_plot():
             'text.latex.preamble': [r'\usepackage{amsmath}', r'\boldmath',
             r'\bf'],
             'text.usetex':True,
-            'axes.labelsize':20.,
-            'xtick.labelsize':16,
-            'ytick.labelsize':16,
+            'axes.labelsize':16.,
+            'xtick.labelsize':12,
+            'ytick.labelsize':12,
             'figure.figsize':[6., 4.],
             'font.family':'DejaVu Sans',
             'legend.fontsize':12}
@@ -47,66 +47,37 @@ def plot_trace(trace, outpath):
 
 def plot_emcee(flatchain,nstars, nsamples,ndims, massprofile, surveyname,
         usefraction):
-    if (massprofile is None):
-        outpath = make_file_path(RESULTSDIR, [np.log10(nstars),
-            np.log10(nsamples),
-            ndims],extra_string=f'post_{surveyname}_point_Ml', ext='.png')
-        plt.close('all')
-        paper_plot()
-        up95 = np.percentile(flatchain[:,0],90)
-        fig = plt.figure()
-        plt.hist(flatchain[:, 0], 50, color="k", histtype="step", density=True);
-        plt.axvline(up95)
-        plt.xlabel(f'$\\log_{10} M_l$');
-        plt.ylabel(f'$p(M_l)$');
-        savefig(fig, outpath, writepdf=0, dpi=100)
-        if usefraction:
-            outpath = make_file_path(RESULTSDIR, [np.log10(nstars),
-                np.log10(nsamples),
-                ndims],extra_string=f'post_{surveyname}_point_f', ext='.png')
-            plt.close('all')
-            paper_plot()
-            up95 = np.percentile(flatchain[:,1],90)
-            fig = plt.figure()
-            plt.hist(flatchain[:, 1], 50, color="k", histtype="step", density=True);
-            plt.axvline(up95)
-            plt.xlabel(f'$f$');
-            plt.ylabel(f'$p(f)$');
-            savefig(fig, outpath, writepdf=0, dpi=100)
-
-    else:
-        massprofiletype = massprofile.type
-        kwargs = massprofile.kwargs
-        if usefraction:
-            kwargs['f'] = 0
-        for key in kwargs:
-            if key ==  'rs':
-                continue
-            outpath = make_file_path(RESULTSDIR, [np.log10(nstars),
-                np.log10(nsamples), ndims],
-                    extra_string=f'post_{surveyname}_{massprofiletype}_{key}',
-                    ext='.png')
-            plt.close('all')
-            paper_plot()
-            i = 0
-            if key == 'Ml': i  = 0
-            else: i = 1
-            up95 = np.percentile(flatchain[:,i],90)
-            fig = plt.figure()
-            plt.hist(flatchain[:, i], 50, color="k", histtype="step", density=True);
-            plt.axvline(up95)
-            if key == 'f':
-                plt.xlabel(r'$f$');
-            else:
-                plt.xlabel(f'$\\log_{10} {key}$');
-            plt.ylabel(f'$p({key})$');
-            savefig(fig, outpath, writepdf=0, dpi=100)
-        plt.close('all')
-        fig = corner.corner(flatchain)
+    massprofiletype = massprofile.type
+    kwargs = massprofile.kwargs
+    if usefraction:
+        kwargs['f'] = 0
+    for key in kwargs.keys():
+        print(key)
         outpath = make_file_path(RESULTSDIR, [np.log10(nstars),
             np.log10(nsamples), ndims],
-            extra_string=f'corner_{surveyname}_{massprofiletype}', ext='.png')
+                extra_string=f'post_{surveyname}_{massprofiletype}_{key}',
+                ext='.png')
+        plt.close('all')
+        paper_plot()
+        i = 0
+        if key == 'Ml': i  = 0
+        else: i = 1
+        up95 = np.percentile(flatchain[:,i],90)
+        fig = plt.figure()
+        plt.hist(flatchain[:, i], 50, color="k", histtype="step", density=True);
+        plt.axvline(up95)
+        if key == 'f':
+            plt.xlabel(r'$f$');
+        else:
+            plt.xlabel(f'$\\log_{10} {key}$');
+        plt.ylabel(f'$p({key})$');
         savefig(fig, outpath, writepdf=0, dpi=100)
+    plt.close('all')
+    fig = corner.corner(flatchain)
+    outpath = make_file_path(RESULTSDIR, [np.log10(nstars),
+        np.log10(nsamples), ndims],
+        extra_string=f'corner_{surveyname}_{massprofiletype}', ext='.png')
+    savefig(fig, outpath, writepdf=0, dpi=100)
 
 def plot_chains(samples, outpath):
     plt.close('all')
@@ -277,9 +248,9 @@ def plot_lens_vector_field(x,y,lensx, lensy, rs_arcsec, outpath):
     Q = ax1.quiver(x/rs_arcsec,y/rs_arcsec,lensx/magnorm, lensy/magnorm,
             color=cm(norm(magnorm)), pivot='mid', units='width', scale=3./1.,
             scale_units='xy')
-#    plt.annotate('', xy=(-0.5, -0.4), xytext=(-0.5, -0.5),
-#            arrowprops=dict(facecolor='black', shrink=0.05))
-    #plt.text(-0.48, -0.46,r'$v_l$', fontsize=20)
+    plt.annotate('', xy=(-3, -2), xytext=(-3, -3),
+            arrowprops=dict(facecolor='black', shrink=0.05))
+    plt.text(-2.9, -2.9,r'$v_l$', fontsize=20)
     circle1 = plt.Circle((0, 0), 1., color='k', fill=False,
             linewidth=0.5)
     ax1.add_artist(circle1)

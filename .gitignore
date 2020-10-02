@@ -5,4 +5,5 @@ results/*
 *.DS_Store
 tests/.ipynb*
 tests/*.ipynb
+tests/*.nb
 tests/*.dat
