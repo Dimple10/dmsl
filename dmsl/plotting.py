@@ -155,6 +155,24 @@ def make_histogram(data,bins, data_name, outpath):
     plt.ylabel('$N$')
     savefig(f, outpath, writepdf=False, dpi=100)
 
+def plot_hists(samples, outpath):
+    '''
+    makes multiple hists on 1 plot based on samples, which should be a
+    dictionary
+    '''
+    plt.close('all')
+    cs = paper_plot()
+    f = plt.figure()
+    for i, (key, value) in enumerate(samples.items()):
+        plt.hist(value, 50, histtype='step', linewidth=2, label=key,
+                density=True, color=cs[i])
+        up95 = np.percentile(value, 90)
+        plt.axvline(up95, color=cs[i], lw=3, linestyle='dashed')
+    plt.xlabel(r'$\log_{10} M_l$');
+    plt.ylabel(r'$p(\log_{10} M_l)$');
+    plt.legend();
+    savefig(f, outpath, writepdf=False, dpi=300)
+
 def make_scatter(x,y,axislabels, outpath):
     size = int(20*(len(x)/1000)**(-1))
     plt.close('all')

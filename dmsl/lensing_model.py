@@ -5,6 +5,7 @@ Functions to calculate lensing signature
 import numpy as np
 import astropy.units as u
 import astropy.constants as const
+from dmsl.convenience import pshape
 
 
 def alphal(Ml, bvec, vvec):
@@ -21,16 +22,23 @@ def alphal(Ml, bvec, vvec):
     if isinstance(vvec, u.Quantity) == False:
         vvec *= u.km / u.s
 
-    b = np.linalg.norm(bvec)
-    v = np.linalg.norm(vvec)
-    accmag = 4 * const.G * v**2 * Ml.M(b) / (const.c**2 * b**3)
+    if bvec.ndim > 1:
+        b = np.linalg.norm(bvec, axis=1)
+        v = np.linalg.norm(vvec, axis=1)
+    else:
+        b = np.linalg.norm(bvec)
+        v = np.linalg.norm(vvec)
+    accmag = 4 * const.G * v**2 / (const.c**2 * b**3)
     vec_part = alphal_vec(Ml, bvec, vvec)
-    alphal = accmag * vec_part
+    if accmag.ndim == 1:
+        alphal = accmag[:,np.newaxis] * vec_part
+    else:
+        alphal = accmag*vec_part
     return (alphal).to(u.uas / u.yr**2, equivalencies = u.dimensionless_angles())
 
 def alphal_vec(Ml, bvec, vvec, vdotvec = None):
     '''
-    Calculates the unitless part of the apparent acceleration due to lensing
+    Calculates the vector part of the apparent acceleration due to lensing
     (i.e. the linalg part)
     Ml must be a mass profile instance.
     bvec must be in physical units -- if not a Quantity, will be assumed to be
@@ -42,10 +50,15 @@ def alphal_vec(Ml, bvec, vvec, vdotvec = None):
         bvec *= u.kpc
     if isinstance(vvec, u.Quantity) == False:
         vvec *= u.km / u.s
-    b = np.linalg.norm(bvec)
-    bunit = bvec / b
-    v = np.linalg.norm(vvec)
-    vunit = vvec / v
+    if bvec.ndim > 1:
+        b = np.linalg.norm(bvec, axis=1)
+        v = np.linalg.norm(vvec, axis=1)
+    else:
+        b = np.array([np.linalg.norm(bvec).value])*bvec.unit
+        v = np.array([np.linalg.norm(vvec).value])*vvec.unit
+
+    bunit = bvec / b[:, np.newaxis]
+    vunit = vvec / v[:, np.newaxis]
     if bunit.ndim == 1:
         bdotv = np.dot(bunit, vunit)
     else:
@@ -58,7 +71,7 @@ def alphal_vec(Ml, bvec, vvec, vdotvec = None):
     Aterm5 = 0.
     if vdotvec != None:
         ## FIXME: not totally right. need to figure out magnitudes
-        vdot = np.linalg.norm(vdotvec)
+        vdot = np.linalg.norm(vdotvec, axis=1)
         vdotunit = vdotvec / vdot
         Aterm2 += 2. * (np.dot(bunit, vdotunit)) * bunit
         Aterm5 += -1. * vdotunit
@@ -75,9 +88,13 @@ def alphal_vec(Ml, bvec, vvec, vdotvec = None):
     ## C(b) term
     Cterm = -1. * (bdotv)**2 * bunit
     ## Put it all together, make each term unitless
-    Term1 = Aterm
-    Term2 = Ml.Mprime(b) / Ml.M(b) * b * Bterm
-    Term3 = Ml.Mpprime(b) / Ml.M(b) * b**2 * Cterm
+    Term1 = Ml.M(b)[:, np.newaxis] * Aterm
+    Term2 = (Ml.Mprime(b) * b)[:, np.newaxis] * Bterm
+    Term3 = (Ml.Mpprime(b) * b**2)[:, np.newaxis] * Cterm
+   # if np.any(Ml.M(b).value == 0):
+   #     mask = Ml.M(b).value == 0
+   #     Term2[mask] = 0
+   #     Term3[mask] = 0
     alphal_vec = Term1 + Term2 + Term3
     return alphal_vec
 
