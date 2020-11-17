@@ -57,6 +57,8 @@ class Sampler():
             self.nstars = survey.nstars
             print(f"Nstars set to {self.nstars}")
 
+        self.alphal = []
+        self.counter = 0
         self.load_starpos()
         self.load_data()
         self.load_lensrdist()
@@ -134,8 +136,8 @@ class Sampler():
         ## pyramid.
         z = self.rdist.rvs(nlens)*u.kpc
         #print(np.sum(z > 0.5*u.kpc)/nlens)
-        x = (np.random.rand(nlens) * self.survey.fov_rad - self.survey.fov_rad / 2.)
-        y = (np.random.rand(nlens) * self.survey.fov_rad - self.survey.fov_rad / 2.)
+        x = (np.random.rand(nlens) * self.survey.fov_rad)
+        y = (np.random.rand(nlens) * self.survey.fov_rad)
         dists = distance.cdist(np.vstack([x, y]).T, self.starpos)
         ind = np.argmin(z[:, np.newaxis]*dists, axis=0)
         beff = np.min(z[:,np.newaxis]*dists, axis=0)
@@ -168,22 +170,28 @@ class Sampler():
         diff = alphal.value - self.data
         chisq = np.sum(diff**2/(self.survey.alphasigma.value**2+self.sigalphab.value**2))
 
-        debug = False
+        debug = True
         if debug == True:
-            b = np.linalg.norm(bvec, axis=1)
-            v = np.linalg.norm(vvec, axis=1)
-            alphalmag = np.linalg.norm(alphal, axis=1)
-            print(nlens)
-            prange(b)
-            print(np.average(b))
-            prange(v)
-            print(np.average(v))
-            prange(alphalmag)
-            print(np.average(alphalmag))
-            print(prange(newmassprofile.M(b)))
-            print(log10Ml)
-            if -0.5*chisq > -998.:
-                sys.exit()
+            #b = np.linalg.norm(bvec, axis=1)
+            #v = np.linalg.norm(vvec, axis=1)
+            #alphalmag = np.linalg.norm(alphal, axis=1)
+            #print(nlens)
+            #prange(b)
+            #print(np.average(b))
+            #prange(v)
+            #print(np.average(v))
+            #prange(alphalmag)
+            #print(np.average(alphalmag))
+            #print(prange(newmassprofile.M(b)))
+            #print(log10Ml)
+            if (-0.5*chisq < -1071.2) and (-0.5*chisq > -1071.3) and (counter <
+                    1):
+                self.alphal.append(alphal)
+                self.okay_params = [log10Ml, vvec, bvec]
+                self.counter +=1 
+            if -0.5*chisq > -999.:
+                self.problem_params = [log10Ml, vvec, bvec]
+                self.alphal.append(alphal)
         return -0.5*chisq
 
     @staticmethod

@@ -23,7 +23,7 @@ nn = 1e3
 time1 = datetime.datetime.now()
 #print('First let`s do a short run with only magnitude of the acceleration.')
 s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e3),
-        MassProfile=mgauss, usefraction=False)
+        MassProfile=mgauss, usefraction=False, ndims=1)
 print('This took',str(datetime.datetime.now()-time1))
 
 

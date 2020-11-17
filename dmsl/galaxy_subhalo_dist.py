@@ -28,7 +28,7 @@ def initialize_dist():
     ## but need 1 - because r array is backwards since need to subtract from
     ## RSUN
     ## I think.
-    hist = np.histogram(rsamples, bins=100)
+    hist = np.histogram(rsamples, bins=10)
     hist_dist = scipy.stats.rv_histogram(hist)
     return hist_dist()
 
