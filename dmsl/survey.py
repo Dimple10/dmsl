@@ -28,8 +28,10 @@ class Survey:
 class Roman(Survey):
     name: str = 'Roman'
     fov_deg: float = np.sqrt(0.28)*u.deg
+   ## fov_deg: float = 1.69e-3*u.deg
     ## FIXME: put in actual l,b for EML.
     fov_center: SkyCoord = SkyCoord(l=0.*u.deg, b=0.*u.deg, frame='galactic')
+    target: str = 'GC'
     maxdlens: float = 1.*u.kpc
     dstars: float = 8.*u.kpc
     alphasigma: float = 0.1*u.uas/u.yr**2
@@ -41,10 +43,12 @@ class Roman(Survey):
 @dataclass
 class GaiaMC(Survey):
     name: str = 'GaiaMC'
-    fov_deg: float = 10.*u.deg
+    ##fov_deg: float  = 10.*u.deg
+    fov_deg: float = 0.04*u.deg
     ## FIXME
     fov_center: SkyCoord = SkyCoord(l=0.*u.deg, b=0.*u.deg, frame='galactic')
-    maxdlens: float = 5.*u.kpc ##FIXME
+    target: str = 'out'
+    maxdlens: float = 48.*u.kpc ##FIXME
     dstars: float = 48.*u.kpc ##LMC
     alphasigma: float = 100.*u.uas/u.yr**2
     nstars: int = int(1.e5) ##FIXME

@@ -24,8 +24,7 @@ def paper_plot():
     sns.set_palette('colorblind')
     plt.rc('font', family='serif', serif='cm10')
     figparams = {
-            'text.latex.preamble': [r'\usepackage{amsmath}', r'\boldmath',
-            r'\bf'],
+            'text.latex.preamble': r'\usepackage{amsmath} \boldmath \bf',
             'text.usetex':True,
             'axes.labelsize':16.,
             'xtick.labelsize':12,
@@ -49,34 +48,45 @@ def plot_emcee(flatchain,nstars, nsamples,ndims, massprofile, surveyname,
         usefraction):
     massprofiletype = massprofile.type
     kwargs = massprofile.kwargs
+    flatchain = np.array(flatchain)
     if usefraction:
         kwargs['f'] = 0
     for key in kwargs.keys():
         print(key)
+        extra_string = f'post_{surveyname}_{massprofiletype}_{key}'
+        if usefraction:
+            extra_string += '_frac'
         outpath = make_file_path(RESULTSDIR, [np.log10(nstars),
             np.log10(nsamples), ndims],
-                extra_string=f'post_{surveyname}_{massprofiletype}_{key}',
+                extra_string=extra_string,
                 ext='.png')
         plt.close('all')
         paper_plot()
         i = 0
         if key == 'Ml': i  = 0
         else: i = 1
-        up95 = np.percentile(flatchain[:,i],90)
         fig = plt.figure()
-        plt.hist(flatchain[:, i], 50, color="k", histtype="step", density=True);
+        try:
+            up95 = np.percentile(flatchain[:,i],90)
+            plt.hist(flatchain[:, i], 50, color="k", histtype="step", density=True);
+        except:
+            up95 = np.percentile(flatchain, 90)
+            plt.hist(flatchain, 50, color="k", histtype="step", density=True);
         plt.axvline(up95)
         if key == 'f':
             plt.xlabel(r'$f$');
         else:
-            plt.xlabel(f'$\\log_{10} {key}$');
+            plt.xlabel(f'$\\log_{{10}} {key}$');
         plt.ylabel(f'$p({key})$');
         savefig(fig, outpath, writepdf=0, dpi=100)
     plt.close('all')
     fig = corner.corner(flatchain)
+    extra_string = f'corner_{surveyname}_{massprofiletype}'
+    if usefraction:
+        extra_string += '_frac'
     outpath = make_file_path(RESULTSDIR, [np.log10(nstars),
         np.log10(nsamples), ndims],
-        extra_string=f'corner_{surveyname}_{massprofiletype}', ext='.png')
+        extra_string=extra_string, ext='.png')
     savefig(fig, outpath, writepdf=0, dpi=100)
 
 def plot_chains(samples, outpath):
@@ -283,3 +293,4 @@ def plot_lens_vector_field(x,y,lensx, lensy, rs_arcsec, outpath):
     plt.xlabel(r'$b_x/r_s$')
     plt.ylabel(r'$b_y/r_s$')
     savefig(fig1, outpath, writepdf=False)
+    return fig1, ax1

@@ -7,3 +7,4 @@ tests/.ipynb*
 tests/*.ipynb
 tests/*.nb
 tests/*.dat
+*/old/*

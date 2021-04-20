@@ -33,6 +33,7 @@ path = make_file_path(VECLENSDIR, fileinds, ext='.dat')
 ## print some useful info
 print("Size of window: ", (size*u.rad).to(u.arcsec))
 rschwarz = (2*const.G*nfwprops['Ml']/const.c**2).to(u.kpc).value
+print('Size of PS lens ', (rschwarz))
 print('Size of PS lens: ', (rschwarz*u.rad))
 print('Size of NFW lens: ', (mnfw.rs.value))
 

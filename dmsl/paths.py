@@ -11,4 +11,5 @@ STARDATADIR = os.path.join(os.path.dirname(__path__._path[0]),
 VECLENSDIR = os.path.join(os.path.dirname(__path__._path[0]),
         'data/vec_lens/')
 RESULTSDIR = os.path.join(os.path.dirname(__path__._path[0]), 'results/')
+FINALDIR = os.path.join(os.path.dirname(__path__._path[0]), 'results/final/')
 
