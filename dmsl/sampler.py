@@ -150,7 +150,7 @@ class Sampler():
         nlens = int(np.ceil(f*Sampler.find_nlens(Ml, self.survey)))
 
         prior = pm.distributions.continuous.Interpolated.dist(self.bs,
-                self.prior_init.pdf(self.bs, a1=self.survey.fov_rad,
+                pdf(self.bs, a1=self.survey.fov_rad,
                     a2=self.survey.fov_rad, n=nlens))
         dists = self.rdist.rvs(self.nstars)*u.kpc
         beff = prior.random(self.nstars)*dists
@@ -250,8 +250,7 @@ class Sampler():
         rv = gsh.initialize_dist(target=self.survey.target,
                 rmax=self.survey.maxdlens.to(u.kpc).value)
         self.rdist = rv
-        self.prior_init = impact_pdf(shapes='a1, a2, n')
-        self.bs = np.logspace(-10, np.log10(self.survey.fov_rad*.999), 1000)
+        self.bs = np.logspace(-8, np.log10(np.sqrt(2)*self.survey.fov_rad), 100)
         print('Prior loaded')
 
     def get_b_min(self, mp, bvec, vvec = np.array([0., 220.])*u.km/u.s):
