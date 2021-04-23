@@ -37,8 +37,16 @@ for n in nlensarray:
         a2=survey.fov_rad, n=n)
     plt.plot(bs*u.rad.to(u.arcsec),  pb/np.max(pb), lw=2, label=f'$N_{{\\rm{{lens}}}}={n}$')
 
+plt.axvline(survey.fov_rad*u.rad.to(u.arcsec), lw=2, linestyle='dashed',
+        color='black')
+plt.xlim([np.min(bs)*u.rad.to(u.arcsec), np.max(bs)*u.rad.to(u.arcsec)])
 plt.legend()
 plt.xlabel(r'$b~[\rm{arcsec}]$')
 plt.ylabel(r'$p(b)$')
 plt.xscale('log')
+savefig(f, FIGPATH)
+
+## DELETE FOR PUBLIC
+FIGPATH = make_file_path(PAPERDIR, {}, extra_string='fig_prior',
+        ext='.png')
 savefig(f, FIGPATH)
