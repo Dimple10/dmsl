@@ -274,7 +274,7 @@ def plot_lens_vector_field(x,y,lensx, lensy, rs_arcsec, outpath):
     fig1, ax1 = plt.subplots()
     ax1.set_aspect('equal')
     Q = ax1.quiver(x/rs_arcsec,y/rs_arcsec,lensx/magnorm, lensy/magnorm,
-            color=cm(norm(magnorm)), pivot='mid', units='width', scale=3./1.,
+            color=cm(norm(magnorm)), pivot='mid', width=1, scale=3./1.,
             scale_units='xy')
     plt.annotate('', xy=(-3, -2), xytext=(-3, -3),
             arrowprops=dict(facecolor='black', shrink=0.05))

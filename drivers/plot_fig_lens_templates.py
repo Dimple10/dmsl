@@ -74,10 +74,9 @@ def load_vecfield(n, size):
 
 def plot_vecfield(x,y, lensx, lensy, rs_arcsec, ax, magnorm, cm):
     paper_plot()
-    #ax.set_aspect('equal')
     Q = ax.quiver(x/rs_arcsec,y/rs_arcsec,lensx/magnorm, lensy/magnorm,
             color=cm(norm(magnorm)), pivot='mid', units='width', scale=3./1.,
-            scale_units='xy')
+            scale_units='xy', width=0.006)
     circle1 = plt.Circle((0, 0), 1., color='k', fill=False,
             linewidth=0.5)
     ax.add_artist(circle1)
@@ -107,15 +106,9 @@ norm = matplotlib.colors.LogNorm(vmin=magnorm[np.nonzero(magnorm)].min(), vmax=m
 cm = matplotlib.cm.Blues
 sm = matplotlib.cm.ScalarMappable(cmap=cm, norm=norm)
 sm.set_array([])
-outpath = make_file_path(RESULTSDIR,[], extra_string='fig_lens_template',
+outpath = make_file_path(FINALDIR,[], extra_string='fig_lens_template',
         ext='.png')
 
-#f, ax = plt.subplots(1,2, sharey=True)
-#ax[0].set_aspect('equal')
-#ax[1].set_aspect('equal')
-#f.subplots_adjust(hspace=0., wspace=0.)
-#divider = make_axes_locatable(ax[1])
-#cax = divider.append_axes('right', size='5%', pad=0.05)
 f = plt.figure(figsize=(11,8))
 ax = AxesGrid(f, 121,  # similar to subplot(141)
                     nrows_ncols=(1, 2),
@@ -134,7 +127,6 @@ ax[0].text(-2.9, -2.9,r'$v_l$', fontsize=15)
 cb1 = f.colorbar(sm, ax=ax[1], cax=ax.cbar_axes[0],
         label=r'$\|\alpha\|~[\mu\rm{as/yr}^2]$')
 [a.xaxis.set_major_locator(MultipleLocator(1)) for a in ax]
-#[a.set_xticks([-2, -1, 0, 1, 2]) for a in ax]
 [a.yaxis.set_major_locator(MultipleLocator(1)) for a in ax]
 [a.xaxis.set_major_locator(MultipleLocator(1)) for a in ax]
 [a.yaxis.set_major_formatter(FormatStrFormatter(r"\textbf{%i}")) for a in ax]
@@ -142,8 +134,12 @@ cb1 = f.colorbar(sm, ax=ax[1], cax=ax.cbar_axes[0],
 [a.xaxis.set_minor_locator(MultipleLocator(0.5)) for a in ax]
 [a.yaxis.set_minor_locator(MultipleLocator(0.5)) for a in ax]
 [a.xaxis.tick_top() for a in ax]
+[a.tick_params(bottom=True, top=True, which='both') for a in ax]
 ax[0].set_xlabel(r'$b_x/r_s$')
 ax[1].set_xlabel(r'$b_x/r_s$')
-[a.xaxis.set_label_position('top') for a in ax]
 ax[0].set_ylabel(r'$b_y/r_s$')
+savefig(f, outpath, writepdf=False)
+## DELETE FOR PUBLIC VERSION
+outpath = make_file_path(PAPERDIR,[], extra_string='fig_lens_template',
+        ext='.png')
 savefig(f, outpath, writepdf=False)
