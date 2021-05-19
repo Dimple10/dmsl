@@ -1,4 +1,8 @@
+'''
+makes latex table with results
+'''
 
+## load packages
 import numpy as np
 import pickle
 import astropy.units as u
@@ -9,7 +13,7 @@ from dmsl.convenience import *
 from dmsl.paths import *
 from dmsl.survey import Roman
 
-
+## set lens types and surveys to loop through
 lenstypes = ['ps', 'gaussian', 'nfw']
 surveys = ['Roman']
 labels = {'ps':[r'$\log_{10} M_l~[\mathrm{M}_{\odot}]$', r'$\rm{Fraction~of~DM}$'],
@@ -22,11 +26,11 @@ def get_chains(lenstypes, surveys):
     for survey in surveys:
         for l in lenstypes:
             tstring = f'{survey}_{l}'
-            f = f'{RESULTSDIR}final/pruned_samples_{survey}_{l}_3_4_2.pkl'
+            f = f'{FINALDIR}pruned_samples_{survey}_{l}_3_4_2.pkl'
             with open(f,'rb') as buff:
                 chains[tstring] = dill.load(buff)
             tstring = f'{survey}_{l}_frac'
-            f = f'{RESULTSDIR}final/pruned_samples_{survey}_{l}_frac_3_4_2.pkl'
+            f = f'{FINALDIR}pruned_samples_{survey}_{l}_frac_3_4_2.pkl'
             with open(f,'rb') as buff:
                 chains[tstring] = dill.load(buff)
     return chains
@@ -82,7 +86,7 @@ write_table(d, nicelenstypes, colnames)
 with open(PAPERDIR+'tab_results.tex', "r") as f:
   filedata = f.read()
 
-# Replace the target string
+# Replace the table with table*
 text = filedata.replace("\\begin{table}", "\\begin{table*}")
 text = text.replace("\\end{table}", "\\end{table*}")
 
@@ -90,13 +94,3 @@ text = text.replace("\\end{table}", "\\end{table*}")
 with open(PAPERDIR+'tab_results.tex', "w") as f:
   f.write(text)
 
-#with open(PAPERDIR+'tab_results.tex', "r+") as f:
-#    text = f.read().replace("\\begin{table}", "\\begin{table*}")
-#    f.seek(0)
-#    f.write(text)
-#    f.close()
-#with open(PAPERDIR+'tab_results.tex', "r+") as f:
-#    f.seek(0)
-#    text = f.read().replace("\\end{table}", "\\end{table*}")
-#    f.write(text)
-#    f.close()

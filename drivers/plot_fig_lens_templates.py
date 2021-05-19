@@ -1,8 +1,8 @@
-
-
 '''
 Plot vector field of acceleration signal
 '''
+
+## load packages
 import sys
 import numpy as np
 import pymc3 as pm
@@ -139,7 +139,6 @@ ax[0].set_xlabel(r'$b_x/r_s$')
 ax[1].set_xlabel(r'$b_x/r_s$')
 ax[0].set_ylabel(r'$b_y/r_s$')
 savefig(f, outpath, writepdf=False)
-## DELETE FOR PUBLIC VERSION
 outpath = make_file_path(PAPERDIR,[], extra_string='fig_lens_template',
         ext='.png')
 savefig(f, outpath, writepdf=False)

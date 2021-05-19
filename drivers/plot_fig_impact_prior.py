@@ -2,7 +2,7 @@
 makes plot of impact parameter prior
 '''
 
-
+## load packages
 import numpy as np
 import matplotlib.pyplot as plt
 import pickle
@@ -46,7 +46,6 @@ plt.ylabel(r'$p(b)$')
 plt.xscale('log')
 savefig(f, FIGPATH)
 
-## DELETE FOR PUBLIC
 FIGPATH = make_file_path(PAPERDIR, {}, extra_string='fig_prior',
         ext='.png')
 savefig(f, FIGPATH)
