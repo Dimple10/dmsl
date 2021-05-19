@@ -75,13 +75,15 @@ class Sampler():
 
     def run_inference(self):
         npar, nwalkers = 1, self.nchains
-        if self.massprofile.type == 'gaussian':
+        if self.massprofile.type != 'ps':
             npar += self.massprofile.nparams - 1
         if self.usefraction:
             npar += 1
         p0 = np.random.rand(nwalkers, npar)*(self.maxlogMl-self.minlogMl)+self.minlogMl
         if self.massprofile.type == 'gaussian':
-            p0[:, 1] = np.random.rand(nwalkers)**(self.logradmax-self.logradmin) + self.logradmin
+            p0[:, 1] = np.random.rand(nwalkers)*(self.logradmax-self.logradmin) + self.logradmin
+        if self.massprofile.type == 'nfw':
+            p0[:, 1] = np.random.rand(nwalkers)*(8-0) + self.logradmin
         if self.usefraction:
             p0[:, -1] = np.random.rand(nwalkers)
 
@@ -133,6 +135,12 @@ class Sampler():
             for i in range(0, modelpars):
                 logradius = pars[i+1]
                 if logradius < self.logradmin or logradius > self.logradmax:
+                    return -np.inf
+        if self.massprofile.type == 'nfw':
+            modelpars = self.massprofile.nparams  - 1
+            for i in range(0, modelpars):
+                conc = pars[i+1] ##logconc
+                if (conc < 0) or (conc > 8):
                     return -np.inf
         return 0.
 
@@ -327,6 +335,7 @@ class Sampler():
             newmp = mp.Gaussian(**kwargs)
         elif mptype == 'nfw':
             kwargs['Ml'] = 10**pars[0]*u.Msun
+            kwargs['c200'] = 10**pars[1]
             newmp = mp.NFW(**kwargs)
         elif mptype =='tnfw':
             kwargs['Ml'] = 10**pars[0]*u.Msun

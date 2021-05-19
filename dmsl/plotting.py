@@ -257,7 +257,7 @@ def savefig(fig, figpath, writepdf=True, dpi=450):
 
     if writepdf:
         pdffigpath = figpath.replace('.png','.pdf')
-        fig.savefig(pdffigpath, bbox_inches='tight', rasterized=True, dpi=dpi)
+        fig.savefig(pdffigpath, bbox_inches='tight', dpi=dpi)
         print('{}: made {}'.format(datetime.now().isoformat(), pdffigpath))
 
     plt.close('all')

@@ -55,3 +55,18 @@ class GaiaMC(Survey):
 
     def __post_init__(self):
         super().__post_init__()
+
+@dataclass
+class WFIRSTLike(Survey):
+    ## as defined by Mishra-Sharma (2020)
+    name: str = 'WFIRSTLike'
+    fov_deg: float = (0.05*4*np.pi*u.rad).to(u.deg)
+    fov_center: SkyCoord = SkyCoord(l=0.*u.deg, b=0.*u.deg, frame='galactic')
+    target: str = 'GC'
+    maxdlens: float = 1.*u.kpc
+    dstars: float = 8.*u.kpc
+    alphasigma: float = 0.1*u.uas/u.yr**2
+    nstars: int = int(1.e11*0.05)
+
+    def __post_init__(self):
+        super().__post_init__()

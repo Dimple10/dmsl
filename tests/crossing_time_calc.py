@@ -21,7 +21,7 @@ print('This is an onsky motion of {}'.format(onskymotion))
 
 
 nstars = 1e8
-avespace = np.sqrt(FOV**2/nstars)
+avespace = np.sqrt(2.*np.pi/180./nstars)
 timetonext = crossing_time(avespace/2.*u.kpc, 300*u.km/u.s)
 
 print('Now let us consider a related question:')
