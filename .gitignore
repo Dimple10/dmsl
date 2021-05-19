@@ -1,10 +1,8 @@
 *__pycache__*
 data/*
+tests/*
 results/*
 *.egg-info*
 *.DS_Store
 tests/.ipynb*
-tests/*.ipynb
-tests/*.nb
-tests/*.dat
 */old/*
