@@ -1,3 +1,7 @@
+'''
+gets pdf for subhalo distances from sun
+'''
+
 import numpy as np
 import astropy.units as u
 import astropy.constants as const
@@ -20,15 +24,13 @@ def initialize_dist(target='GC', rmax=1.0):
         mw_r = R_SUN - rarray
         rhor = density(mw_r)
         rsamples = 1. - (rhor-np.min(rhor))/(np.max(rhor)-np.min(rhor))
-        ## rho(r) monotonically decreases as r increases.
-        ## so, largest probability is at lowest r == farthest from sun towards
-        ## MW center.
-        ## by rescaling this to a 0-1 distribution,
-        ## we still get the correct relationship between r's. So, can just
-        ## sample from this distribution.
-        ## but need 1 - because r array is backwards since need to subtract from
-        ## RSUN
-        ## I think.
+        '''
+        rho(r) monotonically decreases as r increases. Largest probability is
+        at lowest r == farthest from sun towards MW center. By rescaling this
+        to a 0-1 distribution, we still get the correct relationship between
+        r's. So, can just sample from this distribution, but need 1 - because r
+        array is backwards since need to subtract from RSUN
+        '''
     elif target == 'out':
         rarray = np.linspace(0.,rmax, 1000)*u.kpc
         mw_r = R_SUN + rarray

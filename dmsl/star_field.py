@@ -9,7 +9,6 @@ import pandas as pd
 import astropy.units as u
 
 from dmsl import __path__
-from dmsl.constants import *
 from dmsl.paths import *
 from dmsl.convenience import *
 from dmsl.plotting import make_scatter

@@ -1,3 +1,7 @@
+'''
+defines the pdf for the impact parameter
+'''
+
 import numpy as np
 from scipy.stats import rv_continuous
 from scipy.integrate import cumtrapz

@@ -36,14 +36,6 @@ def paper_plot():
     cs = plt.rcParams['axes.prop_cycle'].by_key()['color']
     return cs
 
-def plot_trace(trace, outpath):
-    fig = plt.figure(figsize=(7, 7))
-    pm.traceplot(trace, divergences="bottom", compact=True)
-    #plt.tight_layout()
-    #savefig(fig, outpath, writepdf=0, dpi=100)
-    plt.savefig(outpath, dpi=100)
-    print('{}: made {}'.format(datetime.now().isoformat(), outpath))
-
 def plot_emcee(flatchain,nstars, nsamples,ndims, massprofile, surveyname,
         usefraction):
     massprofiletype = massprofile.type
@@ -109,35 +101,6 @@ def plot_logprob(samples, outpath):
     savefig(fig, outpath, writepdf=0, dpi=100)
 
 def plot_sensitivity(flatchain, outpath):
-#     # Make a 2d normed histogram
-#     H,xedges,yedges=np.histogram2d(flatchain[:,0], flatchain[:,1],bins=40,normed=True)
-# 
-#     norm=H.sum() # Find the norm of the sum
-#     # Set contour levels
-#     contour1=0.99
-#     contour2=0.95
-#     contour3=0.68
-# 
-#     # Set target levels as percentage of norm
-#     target1 = norm*contour1
-#     target2 = norm*contour2
-#     target3 = norm*contour3
-# 
-#     # Take histogram bin membership as proportional to Likelihood
-#     # This is true when data comes from a Markovian process
-#     def objective(limit, target):
-#         w = np.where(H>limit)
-#         count = H[w]
-#         return count.sum() - target
-# 
-#     # Find levels by summing histogram to objective
-#     level1= scipy.optimize.bisect(objective, H.min(), H.max(), args=(target1,))
-#     level2= scipy.optimize.bisect(objective, H.min(), H.max(), args=(target2,))
-#     level3= scipy.optimize.bisect(objective, H.min(), H.max(), args=(target3,))
-# 
-#     # For nice contour shading with seaborn, define top level
-#     level4=H.max()
-#     levels=[level1,level2,level3,level4]
     plt.close('all')
     cs = paper_plot()
     fig, ax = plt.subplots()
@@ -146,9 +109,6 @@ def plot_sensitivity(flatchain, outpath):
             linewidth=2)
     sns.kdeplot(flatchain[:,0], flatchain[:,1], ax=ax, shade=True,
             n_levels=3, cmap='Blues_r')
-    # corner.hist2d(flatchain[:,0], flatchain[:,1], ax=ax, plot_datapoints=False,
-    #         plot_density=False, fill_contours=True, cmap=cm.Blues_r,
-    #             levels=[0.997])
     fig.legend()
     ax.set_xlim([0, 8])
     ax.set_ylim([-3., 3.])
@@ -203,55 +163,7 @@ def plot_corner(trace, outpath):
                         title_fmt='.2g')
     savefig(fig, outpath, writepdf=0, dpi=100)
 
-def plot_nice_lens_corner_1D(trace, outpath):
-    # corner plot of posterior samples
-    plt.close('all')
-    paper_plot()
-    #corvars = ['logMl', 'logbs', 'logabsalphal']
-    corvars = ['logMl', 'logabsalphal']
-    trace_df = trace_to_dataframe(trace, varnames=corvars)
-    trace_df['logMl'] = np.log10(np.exp(trace_df['logMl']))
-    #trace_df['logbs'] = np.log10(np.exp(trace_df['logbs']))
-    trace_df['logabsalphal'] = np.log10(np.exp(trace_df['logabsalphal']))
-    #labs = [r'$\log_{10} M_l$', r'$\log_{10} b$', r'$\log_{10}\alpha_l$']
-    labs = [r'$\log_{10} M_l$', r'$\log_{10}\alpha_l$']
-    fig = corner.corner(trace_df, labels=labs, quantiles=[0.16, 0.5, 0.84],
-                        show_titles=True, title_kwargs={"fontsize": 12},
-                        title_fmt='.2g')
-    savefig(fig, outpath, writepdf=0, dpi=100)
-
-def plot_nice_bkg_corner_1D(trace, outpath):
-    # corner plot of posterior samples
-    plt.close('all')
-    paper_plot()
-    corvars = ['rmw', 'logabsalphab']
-    trace_df = trace_to_dataframe(trace, varnames=corvars)
-    trace_df['logabsalphab'] = np.log10(np.exp(trace_df['logabsalphab']))
-    labs = [r'$r_{\rm{MW}}$',r'$\log_{10}\alpha_b$']
-    fig = corner.corner(trace_df, labels=labs, quantiles=[0.16, 0.5, 0.84],
-                        show_titles=True, title_kwargs={"fontsize": 12},
-                        title_fmt='.2g')
-    savefig(fig, outpath, writepdf=0, dpi=100)
-def plot_nice_lens_corner_2D(trace, outpath):
-    # corner plot of posterior samples
-    plt.close('all')
-    paper_plot()
-    corvars = ['logMl', 'logbs', 'logabsalphal', 'bstheta']
-    trace_df = trace_to_dataframe(trace, varnames=corvars)
-    trace_df['logMl'] = np.log10(np.exp(trace_df['logMl']))
-    trace_df['logbs'] = np.log10(np.exp(trace_df['logbs']))
-    alphalr = np.sqrt(np.exp(trace_df['logabsalphal__1'])**2+ np.exp(trace_df['logabsalphal__0'])**2)
-    trace_df['logalphar'] = np.log10(alphalr)
-    cornerdf = trace_df[['logMl', 'logbs', 'logalphar', 'bstheta']]
-    labs = [r'$\log_{10} M_l$', r'$\log_{10} b$', r'$\log_{10}\alpha_l$',
-    r'$b_{\theta}$']
-    fig = corner.corner(cornerdf, labels=labs, quantiles=[0.16, 0.5, 0.84],
-                        show_titles=True, title_kwargs={"fontsize": 12},
-                        title_fmt='.2g')
-    savefig(fig, outpath, writepdf=0, dpi=100)
-
 def savefig(fig, figpath, writepdf=True, dpi=450):
-    ## stolen from luke
     fig.savefig(figpath, dpi=dpi, bbox_inches='tight')
     print('{}: made {}'.format(datetime.now().isoformat(), figpath))
 

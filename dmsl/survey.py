@@ -1,3 +1,7 @@
+'''
+defines surveys
+'''
+
 import numpy as np
 import astropy.units as u
 import astropy.constants as const
@@ -8,7 +12,6 @@ from dataclasses import dataclass
 class Survey:
     name: str
     fov_deg: float
-    fov_center: SkyCoord
     maxdlens: float
     dstars: float
     alphasigma: float ##error on acceleration measurement
@@ -21,16 +24,12 @@ class Survey:
 
     def update(self):
         self.__post_init__()
-    ##FIXME: add a method to check units.
 
 
 @dataclass
 class Roman(Survey):
     name: str = 'Roman'
     fov_deg: float = np.sqrt(0.28)*u.deg
-   ## fov_deg: float = 1.69e-3*u.deg
-    ## FIXME: put in actual l,b for EML.
-    fov_center: SkyCoord = SkyCoord(l=0.*u.deg, b=0.*u.deg, frame='galactic')
     target: str = 'GC'
     maxdlens: float = 1.*u.kpc
     dstars: float = 8.*u.kpc
@@ -43,25 +42,21 @@ class Roman(Survey):
 @dataclass
 class GaiaMC(Survey):
     name: str = 'GaiaMC'
-    ##fov_deg: float  = 10.*u.deg
     fov_deg: float = 0.04*u.deg
-    ## FIXME
-    fov_center: SkyCoord = SkyCoord(l=0.*u.deg, b=0.*u.deg, frame='galactic')
     target: str = 'out'
-    maxdlens: float = 48.*u.kpc ##FIXME
+    maxdlens: float = 48.*u.kpc 
     dstars: float = 48.*u.kpc ##LMC
     alphasigma: float = 100.*u.uas/u.yr**2
-    nstars: int = int(1.e5) ##FIXME
+    nstars: int = int(1.e5)
 
     def __post_init__(self):
         super().__post_init__()
 
 @dataclass
 class WFIRSTLike(Survey):
-    ## as defined by Mishra-Sharma (2020)
+    ## as defined by Mishra-Sharma et al. (2020)
     name: str = 'WFIRSTLike'
     fov_deg: float = (0.05*4*np.pi*u.rad).to(u.deg)
-    fov_center: SkyCoord = SkyCoord(l=0.*u.deg, b=0.*u.deg, frame='galactic')
     target: str = 'GC'
     maxdlens: float = 1.*u.kpc
     dstars: float = 8.*u.kpc

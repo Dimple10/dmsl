@@ -1,3 +1,7 @@
+'''
+MCMC sampler
+'''
+
 import emcee
 import dill
 import pickle
@@ -44,7 +48,6 @@ class Sampler():
         self.ndims=ndims
         self.minlogMl = minlogMl
         self.maxlogMl = maxlogMl
-        #self.sigalphab = bm.sig_alphab()
         self.sigalphab = 0.*u.uas/u.yr**2
         self.massprofile = MassProfile
         self.logradmax = 4 #pc
@@ -90,8 +93,6 @@ class Sampler():
         sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike,
                 moves=[(emcee.moves.DEMove(), 0.5),
                     (emcee.moves.DESnookerMove(), 0.5),])
-        #sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike,
-        #        moves = emcee.moves.GaussianMove(cov=1))
         sampler.run_mcmc(p0, self.ntune+self.nsamples, progress=True)
 
         samples = sampler.get_chain(discard=self.ntune, flat=True)
@@ -221,27 +222,6 @@ class Sampler():
         mass = RHO_DM*volume
         nlens_k = mass.value/Ml_
         return np.ceil(nlens_k)
-    @staticmethod
-    def place_lenses(nlens, survey):
-        ## FIXME: should be random sphere not cube
-        #physcoords = np.random.rand(totlens, 3)*survey.maxdlens
-        #x= pm.Triangular.dist(lower=0, upper=FOV,c=FOV/2.).random(size=nlens)
-        #y= pm.Triangular.dist(lower=0, upper=FOV,c=FOV/2.).random(size=nlens)
-        ## FIXME: this isn't quite right since some lenses will be out of LOS
-        ## pyramid.
-        z = np.random.rand(nlens) * survey.maxdlens
-        x = (np.random.rand(nlens) * survey.fov_rad - survey.fov_rad / 2.) * z
-        y = (np.random.rand(nlens) * survey.fov_rad - survey.fov_rad / 2.) * z
-        ## get on-sky position
-        ## u = distance to MW center
-        c = SkyCoord(u=z, v=y, w=x,
-                frame='galactic', representation_type='cartesian')
-        c.representation_type = 'spherical'
-        ## filter out sources not anywhere near the FOV.
-        #mask = survey.fov_center.separation(c) < survey.fov_deg*np.sqrt(2)/2.
-        #lenses = c[mask]
-        lenses = c
-        return lenses
 
     def load_starpos(self):
         ## loads data or makes if file not found.
@@ -289,11 +269,6 @@ class Sampler():
         return flatchain
 
     def make_diagnostic_plots(self):
-        ##FIXME: should also thin out samples by half the autocorr time.
-        try:
-            autocorr = int(np.floor(self.sampler.get_autocorr_time()[0]/2))
-        except:
-            autocorr = 1
         flatchain = self.prune_chains()
         plot.plot_emcee(flatchain,
                 self.nstars, self.nsamples,self.ndims, self.massprofile,
