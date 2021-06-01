@@ -17,7 +17,6 @@ from astropy.coordinates import SkyCoord, Galactocentric, Galactic
 from collections import Counter
 
 from dmsl.convenience import *
-from dmsl.constants import *
 from dmsl.paths import *
 from dmsl.accel_data import AccelData
 from dmsl.star_field import StarField
@@ -27,7 +26,6 @@ import dmsl.galaxy_subhalo_dist as gsh
 from dmsl.prior import *
 
 import dmsl.lensing_model as lm
-import dmsl.background_model as bm
 import dmsl.mass_profile as mp
 
 
@@ -90,9 +88,16 @@ class Sampler():
         if self.usefraction:
             p0[:, -1] = np.random.rand(nwalkers)
 
-        sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike,
-                moves=[(emcee.moves.DEMove(), 0.5),
-                    (emcee.moves.DESnookerMove(), 0.5),])
+        if self.massprofile.type == 'noise':
+            npar = 2
+            p0 = np.random.rand(nwalkers, npar)
+            sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike_noise,
+                    moves=[(emcee.moves.DEMove(), 0.5),
+                        (emcee.moves.DESnookerMove(), 0.5),])
+        else:
+            sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike,
+                    moves=[(emcee.moves.DEMove(), 0.5),
+                        (emcee.moves.DESnookerMove(), 0.5),])
         sampler.run_mcmc(p0, self.ntune+self.nsamples, progress=True)
 
         samples = sampler.get_chain(discard=self.ntune, flat=True)
@@ -212,9 +217,23 @@ class Sampler():
             alphal = np.linalg.norm(alphal, axis=1)
 
         diff = alphal.value - self.data
-        chisq = np.sum(diff**2/(self.survey.alphasigma.value**2+self.sigalphab.value**2))
-
+        chisq = np.sum(diff**2/(self.survey.alphasigma.value**2))
         return -0.5*chisq
+
+    def logprior_noise(self,pars):
+        mu, var = pars
+        if var <= 0.:
+            return -np.inf
+        return 0.
+    def lnlike_noise(self,pars):
+        if ~np.isfinite(self.logprior_noise(pars)):
+            return -np.inf
+        mu, var = pars
+        alphal = np.random.normal(loc=mu, scale=var, size=np.shape(self.data))
+        diff = alphal - self.data
+        chisq = np.sum(diff**2/(self.survey.alphasigma.value**2))
+        return -0.5*chisq
+
 
     @staticmethod
     def find_nlens(Ml_, survey):

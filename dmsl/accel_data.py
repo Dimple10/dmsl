@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 
 from dmsl.paths import *
-from dmsl.constants import *
 from dmsl.convenience import *
 from dmsl.plotting import *
 

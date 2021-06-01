@@ -11,6 +11,7 @@ import pandas as pd
 from scipy.integrate import cumtrapz
 from scipy.interpolate import UnivariateSpline
 
+from astropy.cosmology import WMAP9 as cosmo
 RHO_CRIT = cosmo.critical_density(0.)
 
 class MassProfile:
@@ -156,6 +157,16 @@ class NFW(MassProfile):
         '''
         return (1 - 3 * x ** 2 + (x ** 2 + x ** 4) * self.F(x) + (x ** 3 -
             x**5) * self.dFdx(x)) / ( x ** 2 * (-1 + x ** 2) ** 2)
+
+class Noise(MassProfile):
+    '''
+    dummy class to allow for likelihood calculation of just white noise
+    '''
+    def __init__(self, **kwargs):
+        super().__init__('noise')
+        self.kwargs = kwargs
+        self.nicename = 'Noise'
+        self.nparams = 2
 
 
 class From_File(MassProfile):
