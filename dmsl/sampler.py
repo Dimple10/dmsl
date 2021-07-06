@@ -11,6 +11,8 @@ import pandas as pd
 import pymc3 as pm
 from scipy.spatial import distance
 from scipy.stats import trim1
+import scipy.stats
+from scipy.interpolate import UnivariateSpline
 import exoplanet as xo
 import astropy.units as u
 from astropy.coordinates import SkyCoord, Galactocentric, Galactic
@@ -27,6 +29,8 @@ from dmsl.prior import *
 
 import dmsl.lensing_model as lm
 import dmsl.mass_profile as mp
+
+RHO_DM = gsh.density(8.*u.kpc)
 
 
 class Sampler():
@@ -80,7 +84,8 @@ class Sampler():
             npar += self.massprofile.nparams - 1
         if self.usefraction:
             npar += 1
-        p0 = np.random.rand(nwalkers, npar)*(self.maxlogMl-self.minlogMl)+self.minlogMl
+        #p0 = np.random.rand(nwalkers, npar)*(self.maxlogMl-self.minlogMl)+self.minlogMl
+        p0 = np.random.rand(nwalkers, npar)*2+self.minlogMl
         if self.massprofile.type == 'gaussian':
             p0[:, 1] = np.random.rand(nwalkers)*(self.logradmax-self.logradmin) + self.logradmin
         if self.massprofile.type == 'nfw':
@@ -90,14 +95,15 @@ class Sampler():
 
         if self.massprofile.type == 'noise':
             npar = 2
-            p0 = np.random.rand(nwalkers, npar)
-            sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike_noise,
-                    moves=[(emcee.moves.DEMove(), 0.5),
-                        (emcee.moves.DESnookerMove(), 0.5),])
+            p0 = np.random.rand(nwalkers, npar)*1.e-3
+            sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike_noise)
         else:
+            #sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike,
+            #        moves=[(emcee.moves.DEMove(), 0.5),
+            #            (emcee.moves.DESnookerMove(), 0.5),])
+            #sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike)
             sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike,
-                    moves=[(emcee.moves.DEMove(), 0.5),
-                        (emcee.moves.DESnookerMove(), 0.5),])
+                    moves=emcee.moves.GaussianMove(cov=1))
         sampler.run_mcmc(p0, self.ntune+self.nsamples, progress=True)
 
         samples = sampler.get_chain(discard=self.ntune, flat=True)
@@ -116,7 +122,18 @@ class Sampler():
             with open(pklpath, 'wb') as buff:
                 pickle.dump(samples, buff)
             print('Wrote {}'.format(pklpath))
-            flatchain = self.prune_chains()
+            extra_string = f'loglike_{self.survey.name}_{self.massprofile.type}'
+            if self.usefraction == True:
+                extra_string += '_frac'
+            #flatchain, loglike = self.prune_chains()
+            flatchain = sampler.get_chain(discard=self.ntune, flat=True)
+            loglike = sampler.get_log_prob(discard=self.ntune, flat=True)
+            pklpath = make_file_path(RESULTSDIR, [np.log10(self.nstars),
+                np.log10(self.nsamples), self.ndims], extra_string=
+                extra_string, ext='.pkl')
+            with open(pklpath, 'wb') as buff:
+                pickle.dump(loglike, buff)
+            print('Wrote {}'.format(pklpath))
             extra_string = f'pruned_samples_{self.survey.name}_{self.massprofile.type}'
             if self.usefraction == True:
                 extra_string += '_frac'
@@ -162,29 +179,15 @@ class Sampler():
 
         Ml = 10**log10Ml
         nlens = int(np.ceil(f*Sampler.find_nlens(Ml, self.survey)))
+        priorpdf = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
+                n=nlens)
+        priorpdfspline = UnivariateSpline(np.log10(self.bs[priorpdf>0]),
+                np.log10(priorpdf[priorpdf>0]), ext='zeros', s=0)
 
         prior = pm.distributions.continuous.Interpolated.dist(self.bs,
-                pdf(self.bs, a1=self.survey.fov_rad,
-                    a2=self.survey.fov_rad, n=nlens))
+                priorpdf)
         dists = self.rdist.rvs(self.nstars)*u.kpc
-        beff = prior.random(self.nstars)*dists
-        if isinstance(self.bcutoff, dict):
-            bmin = self.find_bmin(Ml*u.Msun, SNR=self.bcutoff['SNR']).value
-        else:
-            pmin = self.bcutoff
-            bmin = np.quantile(beff.value, pmin)
-        beff = beff[beff.value>bmin]
-        count = 0
-        while len(beff) < self.nstars:
-            newbs = prior.random(self.nstars)*dists
-            newbs = newbs[newbs.value>bmin]
-            beff = np.append(beff,newbs)
-            count +=1
-            if count > 100:
-                return -np.inf
-
-        beff = beff[:self.nstars]
-
+        beff = prior.random(size=self.nstars)*dists
 
         vlens = np.array(pm.TruncatedNormal.dist(mu=0., sigma=220, lower=0,
                         upper=550.).random(size=nlens))
@@ -217,28 +220,30 @@ class Sampler():
             alphal = np.linalg.norm(alphal, axis=1)
 
         diff = alphal.value - self.data
-        chisq = np.sum(diff**2/(self.survey.alphasigma.value**2))
-        return -0.5*chisq
+        expp = np.exp(-(diff)**2/(2.*self.survey.alphasigma.value**2))
+        expp *= 1./np.sqrt(2.*np.pi*self.survey.alphasigma.value**2)
+        priorb = (10**(priorpdfspline(np.log10(beff.value/dists.value))))
+        expv = np.exp(-(vl-0.)**2/(2.*220.**2))
+        expv *= 1./np.sqrt(2.*np.pi*220.**2)
+        like = (expv*priorb)[:,np.newaxis]*expp
+        if self.nstars > 1:
+            chisq = np.nansum(np.log(like[like>0]))/(self.nstars-1)
+        else:
+            chisq = np.nansum(np.log(like[like>0]))
 
-    def logprior_noise(self,pars):
-        mu, var = pars
-        if var <= 0.:
-            return -np.inf
-        return 0.
+        return chisq
+
     def lnlike_noise(self,pars):
-        if ~np.isfinite(self.logprior_noise(pars)):
-            return -np.inf
-        mu, var = pars
-        alphal = np.random.normal(loc=mu, scale=var, size=np.shape(self.data))
-        diff = alphal - self.data
-        chisq = np.sum(diff**2/(self.survey.alphasigma.value**2))
-        return -0.5*chisq
+        mu, logsig = pars
+        loglike = np.sum(np.log(scipy.stats.norm(loc=mu,
+            scale=10**logsig).pdf(self.data)))
+        return loglike
 
 
     @staticmethod
     def find_nlens(Ml_, survey):
         volume = survey.fov_rad**2 * survey.maxdlens**3 / 3.
-        mass = RHO_DM*volume
+        mass = (RHO_DM*volume).to(u.Msun)
         nlens_k = mass.value/Ml_
         return np.ceil(nlens_k)
 
@@ -257,7 +262,8 @@ class Sampler():
         rv = gsh.initialize_dist(target=self.survey.target,
                 rmax=self.survey.maxdlens.to(u.kpc).value)
         self.rdist = rv
-        self.bs = np.logspace(-8, np.log10(np.sqrt(2)*self.survey.fov_rad), 100)
+        self.bs = np.logspace(-8, np.log10(np.sqrt(2)*self.survey.fov_rad),
+                1000)
         print('Prior loaded')
 
     def get_b_min(self, mp, bvec, vvec = np.array([0., 220.])*u.km/u.s):
@@ -276,19 +282,23 @@ class Sampler():
 
     def prune_chains(self, maxlengthfrac=0.05):
         chains = []
+        loglikes = []
         for i in range(self.nchains):
             chain = self.sampler.get_chain()[self.ntune:, i,:]
             counts = Counter(chain[:,0])
             most = counts.most_common(1)
             if most[0][1] < int(self.nsamples*maxlengthfrac):
+                loglikes.append(self.sampler.get_log_prob()[self.ntune:, i])
                 chains.append(chain)
         flatchain = [item for sublist in chains for item in sublist]
+        loglike = [item for sublist in loglikes for item in sublist]
         print(f"Chains have been pruned. {len(flatchain)/self.nsamples} chains remain")
         self.flatchain = flatchain
-        return flatchain
+        return flatchain, loglike
 
     def make_diagnostic_plots(self):
-        flatchain = self.prune_chains()
+        #flatchain, __ = self.prune_chains()
+        flatchain = self.sampler.get_chain(flat=True, discard=self.ntune)
         plot.plot_emcee(flatchain,
                 self.nstars, self.nsamples,self.ndims, self.massprofile,
                 self.survey.name, self.usefraction)
