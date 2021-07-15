@@ -36,7 +36,7 @@ class Sampler():
 
     def __init__(self, nstars=None, nsamples=1000, nchains=8, ntune=1000,
             ndims=2, minlogMl=np.log10(1e0), maxlogMl=np.log10(1e8), MassProfile=mp.PointSource(**{'Ml' :
-                1.e7*u.Msun}), SNRcuttoff=10., survey=None, overwrite=True,
+                1.e7*u.Msun}), SNRcutoff=10., survey=None, overwrite=True,
             usefraction=False):
         self.nstars=nstars
         self.nsamples=nsamples
@@ -148,7 +148,7 @@ class Sampler():
                     return -np.inf
         return 0.
 
-    def samplealpha(self, pars):
+    def samplealphal(self, pars):
         ## Samples p(alpha_l | M_l)
         newmassprofile = self.make_new_mass(pars)
         if self.usefraction:
@@ -170,9 +170,9 @@ class Sampler():
         beff = prior.random(size=self.nstars) * dists
 
         vl = np.array(pm.TruncatedNormal.dist(mu=0., sigma=220, lower=0,
-                        upper=550.).random(size=nstars))
-        bvec = np.zeros((self.nstars, 2)) * u.kpc
-        vvec = np.zeros((self.nstars, 2)) * u.km / u.s
+                        upper=550.).random(size=self.nstars))
+        bvec = np.zeros((self.nstars, 2))
+        vvec = np.zeros((self.nstars, 2))
         if self.ndims==2:
             btheta = np.random.rand(self.nstars)* 2. * np.pi
             vtheta = np.random.rand(self.nstars)* 2. * np.pi
@@ -184,22 +184,31 @@ class Sampler():
             ## default to b perp. to v. gives larger signal for NFW halo
             bvec[:,0] = beff
             vvec[:, 1] = vl
+        ## add units back in because astropy is dumb...or really probably it's
+        ## me.
+        bvec *= u.kpc
+        vvec *= u.km / u.s
+        ## get alphal given sampled other params.
         alphal = lm.alphal(newmassprofile, bvec, vvec)
+        ## if only sampling in 1D, get magnitude of vec.
         if self.ndims == 1:
             alphal = np.linalg.norm(alphal, axis=1)
         return alphal
 
     def snr_check(self, alphal0, pars, maxiter=100):
-        mask = alphal0 > self.survey.alphasigma*self.SNRcutoff
-        alphal = alphal0[mask]
+        alphanorm = np.linalg.norm(alphal0, axis=1)
+        mask = alphanorm < self.survey.alphasigma*self.SNRcutoff
+        alphal = alphal0[mask, :]
         count = 0
         while len(alphal) < self.nstars:
-            newalphas = self.samplealphal(pars)[mask]
-            alphal = np.append(alphal, newalphas)
+            newalphas = self.samplealphal(pars)
+            alphanorm = np.linalg.norm(newalphas, axis=1)
+            mask = alphanorm < self.survey.alphasigma*self.SNRcutoff
+            alphal = np.append(alphal, newalphas[mask, :], axis=0)
             count +=1
             if count > maxiter:
                 return -np.inf
-        alphal = alphal[:self.nstars]
+        alphal = alphal[:self.nstars, :]
         return alphal
 
     def lnlike(self,pars):
@@ -209,8 +218,8 @@ class Sampler():
         if self.massprofile.type == 'ps':
             alphal = self.snr_check(alphal, pars)
         diff = alphal.value - self.data
-        chisq = -0.5 * np.sum((diff)**2 / self.survey.alphasigma**2)
-        chisq += -np.log(2 * np.pi * self.survey.alphasigma**2)
+        chisq = -0.5 * np.sum((diff)**2 / self.survey.alphasigma.value**2)
+        chisq += -np.log(2 * np.pi * self.survey.alphasigma.value**2)
         return chisq
 
     def lnlike_noise(self,pars):
