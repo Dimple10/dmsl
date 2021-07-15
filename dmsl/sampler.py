@@ -151,7 +151,7 @@ class Sampler():
             return -np.inf
         if self.usefraction:
             frac = pars[-1]
-            if (frac < 0) or (frac>10.):
+            if (frac < 0) or (frac>1.):
                 return -np.inf
         if self.massprofile.type == 'gaussian':
             modelpars = self.massprofile.nparams  - 1
@@ -230,7 +230,6 @@ class Sampler():
             chisq = np.nansum(np.log(like[like>0]))/(self.nstars-1)
         else:
             chisq = np.nansum(np.log(like[like>0]))
-
         return chisq
 
     def lnlike_noise(self,pars):
