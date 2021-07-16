@@ -22,7 +22,7 @@ from scipy.ndimage import gaussian_filter
 cs = paper_plot()
 
 ## set lens types, surveys, and labels for lens types.
-lenstypes = ['ps', 'gaussian', 'nfw']
+lenstypes = ['gaussian']
 surveys = ['Roman']
 labels = {'ps':[r'$\log_{10} M_l~[\mathrm{M}_{\odot}]$', r'$\rm{Fraction~of~DM}$'],
         'gaussian': [r'$\log_{10} M_l~[\mathrm{M}_{\odot}]$',
@@ -85,7 +85,7 @@ def make_corner(chaindict, lenstype, survey, labeldict):
         ax[axi].set_ylim([np.min(y0)*.1, np.max(y0)*1.1])
         ax[axi].set_xlim([0,np.max(x0)])
         ax[np.shape(fracchains)[1]].set_xlim([0,np.max(x0)])
-    ax[np.shape(fracchains)[1]*np.shape(chains)[1]].set_ylim([0,10])
+    ax[np.shape(fracchains)[1]*np.shape(chains)[1]].set_ylim([0,1])
     if (np.shape(chains)[1] > 1):
         corner.hist2d(chains[:,0], chains[:,1], labels=labeldict[f'{lenstype}'], smooth=1.5,
                   levels=[0.68, 0.95], ax=ax[np.shape(chains)[1]+1],
@@ -105,9 +105,9 @@ def make_corner(chaindict, lenstype, survey, labeldict):
         ax[np.shape(fracchains)[1]*np.shape(chains)[1]+1].set_xlim([0,8])
 
     ax[0].set_ylabel(r'$p(\log_{10} M_l)$');
-    ax[-1].set_xlim([0,10])
+    ax[-1].set_xlim([0,1])
     ax[-3].set_xlim([0,np.max(fracchains[:,0])])
-    ax[-2].set_ylim([0,10])
+    ax[-2].set_ylim([0,1])
     ax = plt.gca()
     ax.xaxis.set_major_locator(plt.MultipleLocator(1.0))
 

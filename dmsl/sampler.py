@@ -83,7 +83,7 @@ class Sampler():
         if self.massprofile.type == 'gaussian':
             p0[:, 1] = np.random.rand(nwalkers)*(self.logradmax-self.logradmin) + self.logradmin
         if self.massprofile.type == 'nfw':
-            p0[:, 1] = np.random.rand(nwalkers)*(8-0) + self.logradmin
+            p0[:, 1] = np.random.rand(nwalkers)*(self.logconcmax-self.logconcmin) + self.logconcmin
         if self.usefraction:
             p0[:, -1] = np.random.rand(nwalkers)
 
@@ -117,13 +117,22 @@ class Sampler():
             extra_string = f'loglike_{self.survey.name}_{self.massprofile.type}'
             if self.usefraction == True:
                 extra_string += '_frac'
-            flatchain = sampler.get_chain(discard=self.ntune, flat=True)
+            flatchain, __ = self.prune_chains()
             loglike = sampler.get_log_prob(discard=self.ntune, flat=True)
             pklpath = make_file_path(RESULTSDIR, [np.log10(self.nstars),
                 np.log10(self.nsamples), self.ndims], extra_string=
                 extra_string, ext='.pkl')
             with open(pklpath, 'wb') as buff:
                 pickle.dump(loglike, buff)
+            print('Wrote {}'.format(pklpath))
+            extra_string = f'pruned_samples_{self.survey.name}_{self.massprofile.type}'
+            if self.usefraction == True:
+                extra_string += '_frac'
+            pklpath = make_file_path(RESULTSDIR, [np.log10(self.nstars),
+                np.log10(self.nsamples), self.ndims],
+                extra_string=extra_string, ext='.pkl')
+            with open(pklpath, 'wb') as buff:
+                pickle.dump(np.array(flatchain), buff)
             print('Wrote {}'.format(pklpath))
 
     def logprior(self,pars):
@@ -270,6 +279,22 @@ class Sampler():
             extra_string=extra_string,
             ext='.png')
         plot.plot_logprob(self.sampler.get_log_prob(), outpath)
+
+    def prune_chains(self, maxlengthfrac=0.05):
+        chains = []
+        loglikes = []
+        for i in range(self.nchains):
+            chain = self.sampler.get_chain()[self.ntune:, i,:]
+            counts = Counter(chain[:,0])
+            most = counts.most_common(1)
+            if most[0][1] < int(self.nsamples*maxlengthfrac):
+                loglikes.append(self.sampler.get_log_prob()[self.ntune:, i])
+                chains.append(chain)
+        flatchain = [item for sublist in chains for item in sublist]
+        loglike = [item for sublist in loglikes for item in sublist]
+        print(f"Chains have been pruned. {len(flatchain)/self.nsamples} chains remain")
+        self.flatchain = flatchain
+        return flatchain, loglike
 
     def make_new_mass(self,pars):
         mptype = self.massprofile.type

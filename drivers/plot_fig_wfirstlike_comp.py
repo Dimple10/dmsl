@@ -71,4 +71,3 @@ chains = get_chains(lenstypes, surveys)
 for s in surveys:
     for l in lenstypes:
         make_corner(chains, l,s, labels)
-
