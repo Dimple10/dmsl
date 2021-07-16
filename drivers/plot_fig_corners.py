@@ -59,7 +59,7 @@ def make_corner(chaindict, lenstype, survey, labeldict):
     FIGPATH = make_file_path(FINALDIR, {}, extra_string=f'fig_{lenstype}',
             ext='.png')
     f = plt.figure(figsize=(8,8))
-    corner.corner(fracchains, labels=labeldict[f'{lenstype}'], smooth=1.5,
+    corner.corner(fracchains, labels=labeldict[f'{lenstype}'], smooth=2.2,
                   levels=[0.68, 0.95],fig=f, smooth1d=1.0, color='steelblue',
                   max_n_ticks=10, **{'plot_datapoints':False});
     ax = f.axes
@@ -87,12 +87,12 @@ def make_corner(chaindict, lenstype, survey, labeldict):
         ax[np.shape(fracchains)[1]].set_xlim([0,np.max(x0)])
     ax[np.shape(fracchains)[1]*np.shape(chains)[1]].set_ylim([0,1])
     if (np.shape(chains)[1] > 1):
-        corner.hist2d(chains[:,0], chains[:,1], labels=labeldict[f'{lenstype}'], smooth=1.5,
+        corner.hist2d(chains[:,0], chains[:,1], labels=labeldict[f'{lenstype}'], smooth=2.2,
                   levels=[0.68, 0.95], ax=ax[np.shape(chains)[1]+1],
                   color='orange', plot_density=False,
                   max_n_ticks=10,plot_datapoints=False,
                   **{'zorder':1}, label='Fraction of DM = 1');
-        corner.hist2d(fracchains[:,0], fracchains[:,1], labels=labeldict[f'{lenstype}'], smooth=1.5,
+        corner.hist2d(fracchains[:,0], fracchains[:,1], labels=labeldict[f'{lenstype}'], smooth=2.2,
                   levels=[0.68, 0.95], ax=ax[np.shape(chains)[1]+1],
                   color='steelblue',
                   max_n_ticks=10,plot_datapoints=False,

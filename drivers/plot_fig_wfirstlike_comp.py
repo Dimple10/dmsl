@@ -41,7 +41,7 @@ def make_corner(chaindict, lenstype, survey, labeldict):
     FIGPATH = make_file_path(FINALDIR, {}, extra_string=f'fig_{survey}',
             ext='.png')
     f = plt.figure(figsize=(4,4))
-    corner.hist2d(chains[:,0], chains[:,1], labels=labeldict[f'{lenstype}'], smooth=1.8,
+    corner.hist2d(chains[:,0], chains[:,1], labels=labeldict[f'{lenstype}'], smooth=2.2,
                   levels=[0.68, 0.95],fig=f, color='steelblue',
                   max_n_ticks=10, **{'plot_datapoints':False});
     ax = f.axes
