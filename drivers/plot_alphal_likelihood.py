@@ -58,3 +58,5 @@ ax.set_ylabel(r'$p(\vec{\alpha}_l | M_l, \vec{X}_l)$')
 FIGPATH = f'{FINALDIR}fig_alphal_likelihood'
 savefig(f,FIGPATH,
         writepdf=False)
+PAPERPATH = f'{PAPERDIR}fig_alphal_likelihood'
+savefig(f, PAPERPATH, writepdf=True)
