@@ -46,7 +46,7 @@ class Sampler():
         self.minlogMl = minlogMl
         self.maxlogMl = maxlogMl
         self.massprofile = MassProfile
-        self.SNRcutoff = 10.
+        self.SNRcutoff = SNRcutoff
         self.logradmax = 4 #pc
         self.logradmin = -4
         self.logconcmax = 4
@@ -216,7 +216,7 @@ class Sampler():
             alphal = np.append(alphal, newalphas[mask, :], axis=0)
             count +=1
             if count > maxiter:
-                return -np.inf
+                return "error"
         alphal = alphal[:self.nstars, :]
         return alphal
 
@@ -226,13 +226,13 @@ class Sampler():
         alphal = self.samplealphal(pars)
         if self.massprofile.type == 'ps':
             alphal = self.snr_check(alphal, pars)
+            if alphal == "error":
+                return -np.inf
         if np.any(np.isnan(alphal)):
             return -np.inf
         diff = alphal.value - self.data
         chisq = -0.5 * np.sum((diff)**2 / self.survey.alphasigma.value**2)
         chisq += -np.log(2 * np.pi * self.survey.alphasigma.value**2)
-        prange(alphal)
-        print(chisq)
         return chisq
 
     def lnlike_noise(self,pars):
