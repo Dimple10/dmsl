@@ -49,7 +49,7 @@ class Sampler():
         self.SNRcutoff = 10.
         self.logradmax = 4 #pc
         self.logradmin = -4
-        self.logconcmax = 2
+        self.logconcmax = 4
         self.logconcmin = 0
         self.overwrite = overwrite
         self.usefraction = usefraction
@@ -226,9 +226,13 @@ class Sampler():
         alphal = self.samplealphal(pars)
         if self.massprofile.type == 'ps':
             alphal = self.snr_check(alphal, pars)
+        if np.any(np.isnan(alphal)):
+            return -np.inf
         diff = alphal.value - self.data
         chisq = -0.5 * np.sum((diff)**2 / self.survey.alphasigma.value**2)
         chisq += -np.log(2 * np.pi * self.survey.alphasigma.value**2)
+        prange(alphal)
+        print(chisq)
         return chisq
 
     def lnlike_noise(self,pars):

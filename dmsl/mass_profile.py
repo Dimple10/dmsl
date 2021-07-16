@@ -119,6 +119,8 @@ class NFW(MassProfile):
         self.delta_c = delta_c
         x = ( b / rs ).to('').value
         Mr = 4. * np.pi * rhos * rs**3 * ( np.log( x / 2. ) + self.F(x) )
+        ## some instability in np arctanh (?) causes weird mass values below certain x.
+        Mr[x<1.e-3] = 0.*u.Msun
         return Mr.to(u.Msun)
 
     def Mprime(self, b):
