@@ -22,7 +22,7 @@ from scipy.ndimage import gaussian_filter
 cs = paper_plot()
 
 ## set lens types, surveys, and labels for lens types.
-lenstypes = ['gaussian']
+lenstypes = ['gaussian', 'nfw']
 surveys = ['Roman']
 labels = {'ps':[r'$\log_{10} M_l~[\mathrm{M}_{\odot}]$', r'$\rm{Fraction~of~DM}$'],
         'gaussian': [r'$\log_{10} M_l~[\mathrm{M}_{\odot}]$',
@@ -65,13 +65,13 @@ def make_corner(chaindict, lenstype, survey, labeldict):
     ax = f.axes
     for i in range(0, np.shape(chains)[1]):
         axi = i*np.shape(fracchains)[1] + i
-        ax[axi].axvline(np.percentile(fracchains[:,0], 95), linestyle='dashed', lw=2,
+        ax[axi].axvline(np.percentile(fracchains[:,i], 95), linestyle='dashed', lw=2,
                 color=cs[0])
-        ax[axi].axvline(np.percentile(fracchains[:,0], 5), linestyle='dashed', lw=2,
+        ax[axi].axvline(np.percentile(fracchains[:,i], 5), linestyle='dashed', lw=2,
                 color=cs[0])
-        ax[axi].axvline(np.percentile(chains, 5), linestyle='dashed', linewidth=2,
+        ax[axi].axvline(np.percentile(chains[:,i], 5), linestyle='dashed', linewidth=2,
                 color=cs[1])
-        ax[axi].axvline(np.percentile(chains, 95), linestyle='dashed', linewidth=2,
+        ax[axi].axvline(np.percentile(chains[:,i], 95), linestyle='dashed', linewidth=2,
             color=cs[1])
         n, b = np.histogram(
                 chains[:,i], bins=15,
@@ -101,8 +101,8 @@ def make_corner(chaindict, lenstype, survey, labeldict):
         ax[np.shape(fracchains)[1]].set_ylim([-4,4])
         ax[np.shape(fracchains)[1]*np.shape(chains)[1]+1].set_xlim([-4,4])
     elif (np.shape(chains)[1] > 1) and (lenstype=='nfw'):
-        ax[np.shape(fracchains)[1]].set_ylim([0,8])
-        ax[np.shape(fracchains)[1]*np.shape(chains)[1]+1].set_xlim([0,8])
+        ax[np.shape(fracchains)[1]].set_ylim([0,4])
+        ax[np.shape(fracchains)[1]*np.shape(chains)[1]+1].set_xlim([0,4])
 
     ax[0].set_ylabel(r'$p(\log_{10} M_l)$');
     ax[-1].set_xlim([0,1])
