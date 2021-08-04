@@ -27,7 +27,6 @@ vltheta = np.pi / 2.
 vlthetadeg = vltheta * 180 / np.pi
 vl = (1.e-3 * const.c).to(u.km / u.s).value
 vvec = np.array([vl * np.cos(vltheta), vl * np.sin(vltheta)])
-rarray = np.logspace(-2, 2, 2000) * u.kpc
 nfwprops = {'Ml' : 1.e7 * u.Msun, 'c200' : 13.}
 mnfw = NFW(**nfwprops)
 mps = PointSource(**nfwprops)
@@ -40,7 +39,7 @@ path = make_file_path(VECLENSDIR, fileinds, ext='.dat')
 print("Size of window: ", (size*u.rad).to(u.arcsec))
 rschwarz = (2*const.G*nfwprops['Ml']/const.c**2).to(u.kpc).value
 print('Size of PS lens: ', (rschwarz*u.rad))
-print('Size of NFW lens: ', (mnfw.rs.value))
+print('Size of NFW lens: ', (mnfw.rs))
 
 def make_grid(n, size):
     X = np.linspace(-size/2., size/2., n)
