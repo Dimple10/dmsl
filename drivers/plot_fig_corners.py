@@ -22,7 +22,7 @@ from scipy.ndimage import gaussian_filter
 cs = paper_plot()
 
 ## set lens types, surveys, and labels for lens types.
-lenstypes = ['gaussian', 'nfw']
+lenstypes = ['gaussian', 'nfw', 'ps']
 surveys = ['Roman']
 labels = {'ps':[r'$\log_{10} M_l~[\mathrm{M}_{\odot}]$', r'$\rm{Fraction~of~DM}$'],
         'gaussian': [r'$\log_{10} M_l~[\mathrm{M}_{\odot}]$',
@@ -55,28 +55,32 @@ def make_corner(chaindict, lenstype, survey, labeldict):
     '''
     chains = chaindict[f'{survey}_{lenstype}']
     fracchains = chaindict[f'{survey}_{lenstype}_frac']
+    smoothparam = 2.2
+    if lenstype == 'ps':
+        smoothparam = 3.0 ## need more smoothing because needed to cut more walkers due to them getting stuck.
 
     FIGPATH = make_file_path(FINALDIR, {}, extra_string=f'fig_{lenstype}',
             ext='.png')
     f = plt.figure(figsize=(8,8))
-    corner.corner(fracchains, labels=labeldict[f'{lenstype}'], smooth=2.2,
-                  levels=[0.68, 0.95],fig=f, smooth1d=1.0, color='steelblue',
-                  max_n_ticks=10, **{'plot_datapoints':False});
+    corner.corner(fracchains, labels=labeldict[f'{lenstype}'],
+        smooth=smoothparam, levels=[0.68, 0.95],fig=f, smooth1d=smoothparam,
+        color='steelblue', max_n_ticks=10, **{'plot_datapoints':False});
     ax = f.axes
     for i in range(0, np.shape(chains)[1]):
         axi = i*np.shape(fracchains)[1] + i
-        ax[axi].axvline(np.percentile(fracchains[:,i], 95), linestyle='dashed', lw=2,
-                color=cs[0])
-        ax[axi].axvline(np.percentile(fracchains[:,i], 5), linestyle='dashed', lw=2,
-                color=cs[0])
-        ax[axi].axvline(np.percentile(chains[:,i], 5), linestyle='dashed', linewidth=2,
+        if lenstype == 'ps':
+            ax[axi].axvline(np.percentile(fracchains[:,i], 97.5), linestyle='dashed', lw=2,
+                    color=cs[0])
+            ax[axi].axvline(np.percentile(fracchains[:,i], 2.5), linestyle='dashed', lw=2,
+                    color=cs[0])
+            ax[axi].axvline(np.percentile(chains[:,i], 2.5), linestyle='dashed', linewidth=2,
+                    color=cs[1])
+            ax[axi].axvline(np.percentile(chains[:,i], 97.5), linestyle='dashed', linewidth=2,
                 color=cs[1])
-        ax[axi].axvline(np.percentile(chains[:,i], 95), linestyle='dashed', linewidth=2,
-            color=cs[1])
         n, b = np.histogram(
                 chains[:,i], bins=15,
                     weights=np.ones(len(chains))*len(fracchains)/len(chains))
-        n = gaussian_filter(n, 0.8)
+        n = gaussian_filter(n, 2.0)
         x0 = np.array(list(zip(b[:-1], b[1:]))).flatten()
         y0 = np.array(list(zip(n, n))).flatten()
         ax[axi].plot(x0, y0, c=cs[1], label='Fraction of DM = 1')
@@ -87,12 +91,12 @@ def make_corner(chaindict, lenstype, survey, labeldict):
         ax[np.shape(fracchains)[1]].set_xlim([0,np.max(x0)])
     ax[np.shape(fracchains)[1]*np.shape(chains)[1]].set_ylim([0,1])
     if (np.shape(chains)[1] > 1):
-        corner.hist2d(chains[:,0], chains[:,1], labels=labeldict[f'{lenstype}'], smooth=2.2,
+        corner.hist2d(chains[:,0], chains[:,1], labels=labeldict[f'{lenstype}'], smooth=smoothparam,
                   levels=[0.68, 0.95], ax=ax[np.shape(chains)[1]+1],
                   color='orange', plot_density=False,
                   max_n_ticks=10,plot_datapoints=False,
                   **{'zorder':1}, label='Fraction of DM = 1');
-        corner.hist2d(fracchains[:,0], fracchains[:,1], labels=labeldict[f'{lenstype}'], smooth=2.2,
+        corner.hist2d(fracchains[:,0], fracchains[:,1], labels=labeldict[f'{lenstype}'], smooth=smoothparam,
                   levels=[0.68, 0.95], ax=ax[np.shape(chains)[1]+1],
                   color='steelblue',
                   max_n_ticks=10,plot_datapoints=False,
