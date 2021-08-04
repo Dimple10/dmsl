@@ -16,44 +16,44 @@ print(roman.alphasigma)
 
 # time1 = datetime.datetime.now()
 # print("Running P.S. case, no fraction")
-# s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(5e3), survey=roman,
-#         MassProfile=ps, usefraction=False, nchains=32, ndims=2, minlogMl = -3)
+# s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e4), survey=roman,
+#         MassProfile=ps, usefraction=False, nchains=128, ndims=2, minlogMl = 0, SNRcutoff=1.0)
 # print('This took',str(datetime.datetime.now()-time1))
 #
 # time1 = datetime.datetime.now()
 # print("Running P.S. case, yes fraction")
-# s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(5e3), survey=roman,
-#        MassProfile=ps, usefraction=True, nchains=32, ndims=2, minlogMl = -3)
+# s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e4), survey=roman,
+#        MassProfile=ps, usefraction=True, nchains=128, ndims=2, minlogMl = 0, SNRcutoff=1.0)
 # print('This took',str(datetime.datetime.now()-time1))
 
 
-time1 = datetime.datetime.now()
-print("Running gaussian case, no fraction")
-s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e4), survey=roman,
-       MassProfile=mgauss, usefraction=False, nchains=64, ndims=2)
-print('This took',str(datetime.datetime.now()-time1))
-
-time1 = datetime.datetime.now()
-print("Running gaussian case, yes fraction")
-s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e4), survey=roman,
-       MassProfile=mgauss, usefraction=True, nchains=64, ndims=2)
-print('This took',str(datetime.datetime.now()-time1))
+# time1 = datetime.datetime.now()
+# print("Running gaussian case, no fraction")
+# s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e4), survey=roman,
+#        MassProfile=mgauss, usefraction=False, nchains=64, ndims=2)
+# print('This took',str(datetime.datetime.now()-time1))
+#
+# time1 = datetime.datetime.now()
+# print("Running gaussian case, yes fraction")
+# s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e4), survey=roman,
+#        MassProfile=mgauss, usefraction=True, nchains=64, ndims=2)
+# print('This took',str(datetime.datetime.now()-time1))
 
 # time1 = datetime.datetime.now()
 # print("Running NFW case, no fraction")
-# s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(5e3), survey=roman,
-#        MassProfile=nfw, usefraction=False, nchains=16, ndims=2)
+# s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e4), survey=roman,
+#        MassProfile=nfw, usefraction=False, nchains=64, ndims=2)
 # print('This took',str(datetime.datetime.now()-time1))
 #
 # time1 = datetime.datetime.now()
 # print("Running NFW case, yes fraction")
-# s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(5e3), survey=roman,
-#        MassProfile=nfw, usefraction=True, nchains=16, ndims=2)
+# s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e4), survey=roman,
+#        MassProfile=nfw, usefraction=True, nchains=64, ndims=2)
 # print('This took',str(datetime.datetime.now()-time1))
 
-time1 = datetime.datetime.now()
-print("Running Mishra-Sharma case, no fraction")
-s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e4),
-        survey=wfirstlike, minlogMl = 0.,
-        MassProfile=mgauss, usefraction=False, nchains=64, ndims=2)
-print('This took',str(datetime.datetime.now()-time1))
+# time1 = datetime.datetime.now()
+# print("Running Mishra-Sharma case, no fraction")
+# s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e4),
+#         survey=wfirstlike, minlogMl = 0.,
+#         MassProfile=mgauss, usefraction=False, nchains=64, ndims=2)
+# print('This took',str(datetime.datetime.now()-time1))
