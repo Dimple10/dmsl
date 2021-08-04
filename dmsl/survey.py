@@ -34,7 +34,7 @@ class Roman(Survey):
     maxdlens: float = 1.*u.kpc
     dstars: float = 8.*u.kpc
     alphasigma: float = 0.1*u.uas/u.yr**2
-    nstars: int = int(1.e7)
+    nstars: int = int(1.e8)
 
     def __post_init__(self):
         super().__post_init__()
