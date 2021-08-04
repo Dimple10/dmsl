@@ -49,7 +49,7 @@ class Sampler():
         self.SNRcutoff = SNRcutoff
         self.logradmax = 4 #pc
         self.logradmin = -4
-        self.logconcmax = 4
+        self.logconcmax = 8
         self.logconcmin = 0
         self.overwrite = overwrite
         self.usefraction = usefraction
@@ -99,7 +99,7 @@ class Sampler():
         sampler.run_mcmc(p0, self.ntune+self.nsamples, progress=True)
 
         samples = sampler.get_chain(discard=self.ntune, flat=True)
-        print(f"90\% upper limit on Ml: {np.percentile(samples[:,0], 90)}")
+        print(f"95\% upper limit on Ml: {np.percentile(samples[:,0], 95)}")
         ## save samples to class
         self.sampler = sampler
 
@@ -174,7 +174,7 @@ class Sampler():
                 np.log10(priorpdf[priorpdf>0]), ext='zeros', s=0)
 
         prior = pm.distributions.continuous.Interpolated.dist(self.bs,
-                priorpdf)
+                10**priorpdfspline(np.log10(self.bs)))
         dists = self.rdist.rvs(self.nstars) * u.kpc
         beff = prior.random(size=self.nstars) * dists
 
@@ -225,20 +225,23 @@ class Sampler():
             return -np.inf
         alphal = self.samplealphal(pars)
         if self.massprofile.type == 'ps':
+            ## if ps, need to do snr check and re-sample if any have too high snr. this stops walkers from getting too stuck.
             alphal = self.snr_check(alphal, pars)
             if alphal == "error":
                 return -np.inf
         if np.any(np.isnan(alphal)):
             return -np.inf
-        diff = alphal.value - self.data
-        chisq = -0.5 * np.sum((diff)**2 / self.survey.alphasigma.value**2)
-        chisq += -np.log(2 * np.pi * self.survey.alphasigma.value**2)
+        try:
+            diff = alphal.value - self.data
+        except:
+            return -np.inf
+        chisq = -0.5 * np.sum((diff)**2 / self.survey.alphasigma.value**2 -np.log(2 * np.pi * self.survey.alphasigma.value**2))
         return chisq
 
     def lnlike_noise(self,pars):
-        mu, logsig = pars
+        mu, logvar = pars
         loglike = np.sum(np.log(scipy.stats.norm(loc=mu,
-            scale=10**logsig).pdf(self.data)))
+            scale=np.sqrt(np.exp(logvar))).pdf(self.data)))
         return loglike
 
     @staticmethod
