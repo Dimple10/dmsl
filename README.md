@@ -1,6 +1,6 @@
 
 This respository contains all of the scripts needed to perform the analysis and
-create the plots from Pardo & Doré (2021) (LINK TBA).
+create the plots from [Pardo & Doré (2021)](https://ui.adsabs.harvard.edu/abs/2021arXiv210810886P/abstract).
 
 The [`dmsl/`](dmsl/) directory contains the main calculation scripts.
 
