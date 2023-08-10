@@ -65,3 +65,16 @@ class WFIRSTLike(Survey):
 
     def __post_init__(self):
         super().__post_init__()
+
+@dataclass
+class Kepler(Survey):
+    name: str = 'Kepler'
+    fov_deg: float = (10)*u.deg
+    target: str = 'out'
+    maxdlens: float = 10.*u.pc
+    dstars: float = 600.*u.pc
+    alphasigma: float = 326.5*u.uas/u.yr**2
+    nstars: int = int(1.5e5)
+
+    def __post_init__(self):
+        super().__post_init__()

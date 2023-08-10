@@ -34,5 +34,7 @@ class AccelData():
         fileinds = [np.log10(nstars), ndims, survey.alphasigma.value]
         filepath = make_file_path(STARDATADIR, fileinds,
                 extra_string=f'{survey.name}_hist',ext='.png')
+        print(filepath)
+        print(data.shape)
         make_histogram(data.to_numpy(),int(len(data)/100) + 1, r'\alpha', filepath)
 

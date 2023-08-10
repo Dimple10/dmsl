@@ -13,7 +13,7 @@ make_file_path
 '''
 import numpy as np
 import pymc3 as pm
-import exoplanet as xo
+import exoplanet_core as xo
 
 # flatten lists
 flatten = lambda l: [item for sublist in l for item in sublist]

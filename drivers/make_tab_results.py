@@ -14,8 +14,8 @@ from dmsl.paths import *
 from dmsl.survey import Roman
 
 ## set lens types and surveys to loop through
-lenstypes = ['ps', 'gaussian', 'nfw']
-surveys = ['Roman']
+lenstypes = np.array(['ps', 'gaussian', 'nfw'])
+surveys = np.array(['Roman'])
 labels = {'ps':[r'$\log_{10} M_l~[\mathrm{M}_{\odot}]$', r'$\rm{Fraction~of~DM}$'],
         'gaussian': [r'$\log_{10} M_l~[\mathrm{M}_{\odot}]$',
             r'$\log_{10} R_0~[\rm{pc}]$',
@@ -25,12 +25,14 @@ def get_chains(lenstypes, surveys):
     chains = {}
     for survey in surveys:
         for l in lenstypes:
+            #tstring = survey+'_'
             tstring = f'{survey}_{l}'
-            f = f'{FINALDIR}pruned_samples_{survey}_{l}_3_4_2.pkl'
+            f = f"{FINALDIR}pruned_samples_{survey}_{l}_3_4_2.pkl"
+            #f = FINALDIR + "pruned_samples_"+survey+"_"+l+"
             with open(f,'rb') as buff:
                 chains[tstring] = dill.load(buff)
-            tstring = f'{survey}_{l}_frac'
-            f = f'{FINALDIR}pruned_samples_{survey}_{l}_frac_3_4_2.pkl'
+            tstring = f"{survey}_{l}_frac"
+            f = f"{FINALDIR}pruned_samples_{survey}_{l}_frac_3_4_2.pkl"
             with open(f,'rb') as buff:
                 chains[tstring] = dill.load(buff)
     return chains

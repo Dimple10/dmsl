@@ -10,9 +10,10 @@ mgauss = Gaussian(**gaussprops)
 nfwprops = {'Ml':1.e6*u.Msun, 'c200': 13}
 nfw = NFW(**nfwprops)
 nn = 1e3
+kepler = s.Kepler()
 roman = s.Roman(alphasigma = 0.1*u.uas/u.yr**2*(nn/1.e8)**(1./2.))
 wfirstlike = s.WFIRSTLike(alphasigma = 0.1*u.uas/u.yr**2*(nn/(1.e11*0.05*4*np.pi)))
-print(roman.alphasigma)
+print(kepler.alphasigma)
 
 # time1 = datetime.datetime.now()
 # print("Running P.S. case, no fraction")
@@ -39,17 +40,23 @@ print(roman.alphasigma)
 #        MassProfile=mgauss, usefraction=True, nchains=64, ndims=2)
 # print('This took',str(datetime.datetime.now()-time1))
 
-# time1 = datetime.datetime.now()
-# print("Running NFW case, no fraction")
-# s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e4), survey=roman,
-#        MassProfile=nfw, usefraction=False, nchains=64, ndims=2)
-# print('This took',str(datetime.datetime.now()-time1))
-#
-# time1 = datetime.datetime.now()
-# print("Running NFW case, yes fraction")
-# s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e4), survey=roman,
-#        MassProfile=nfw, usefraction=True, nchains=64, ndims=2)
-# print('This took',str(datetime.datetime.now()-time1))
+time1 = datetime.datetime.now()
+print("Running NFW, Kepler case, no fraction")
+s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(5e3), survey=kepler,
+       MassProfile=nfw, usefraction=False, nchains=64, ndims=2)
+print('This took',str(datetime.datetime.now()-time1))
+
+#time1 = datetime.datetime.now()
+#print("Running NFW case, no fraction")
+#s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e2), survey=roman,
+#       MassProfile=nfw, usefraction=False, nchains=64, ndims=2)
+#print('This took',str(datetime.datetime.now()-time1))
+
+#time1 = datetime.datetime.now()
+#print("Running NFW case, yes fraction")
+#s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e4), survey=roman,
+#       MassProfile=nfw, usefraction=True, nchains=64, ndims=2)
+#print('This took',str(datetime.datetime.now()-time1))
 
 # time1 = datetime.datetime.now()
 # print("Running Mishra-Sharma case, no fraction")
