@@ -51,13 +51,13 @@ def alphal_vec(Ml, bvec, vvec, vdotvec = None):
     if isinstance(vvec, u.Quantity) == False:
         vvec *= u.km / u.s
     if bvec.ndim > 1:
-        b = np.linalg.norm(bvec*1.0, axis=1)
+        b = np.linalg.norm(bvec, axis=1)
         v = np.linalg.norm(vvec, axis=1)
     else:
         b = np.array([np.linalg.norm(bvec).value])*bvec.unit
         v = np.array([np.linalg.norm(vvec).value])*vvec.unit
 
-    bunit = bvec*1.0 / b[:, np.newaxis]
+    bunit = bvec / b[:, np.newaxis]
     vunit = vvec / v[:, np.newaxis]
     if bunit.ndim == 1:
         bdotv = np.dot(bunit, vunit)
@@ -87,29 +87,9 @@ def alphal_vec(Ml, bvec, vvec, vdotvec = None):
     Bterm = Bterm1 + Bterm2 + Bterm3 + Bterm4
     ## C(b) term
     Cterm = -1. * (bdotv)**2 * bunit
-
     ## Put it all together, make each term unitless
-    if np.size(Ml) > 1:
-        Term1, Term2, Term3 = 0,0,0
-        for m in Ml:
-            Term1 += m.M(b)[:, np.newaxis] * Aterm #FIXME Loop over all Ml (add them all?)
-            Term2 += (m.Mprime(b) * b)[:, np.newaxis] * Bterm
-            Term3 += (m.Mpprime(b) * b**2)[:, np.newaxis] * Cterm
-    else:
-        Term1 = Ml.M(b)[:, np.newaxis] * Aterm
-        Term2 = (Ml.Mprime(b) * b)[:, np.newaxis] * Bterm
-        Term3 = (Ml.Mpprime(b) * b ** 2)[:, np.newaxis] * Cterm
-        #print('Mlprime shape=',np.shape(Ml.Mpprime(b)*b**2[:]))
-
+    Term1 = Ml.M(b)[:, np.newaxis] * Aterm
+    Term2 = (Ml.Mprime(b) * b)[:, np.newaxis] * Bterm
+    Term3 = (Ml.Mpprime(b) * b**2)[:, np.newaxis] * Cterm
     alphal_vec = Term1 + Term2 + Term3
-    # print('Term2 size, term3 size', np.size(Term2), np.size(Term3)) #1000, 1000
-    # if np.any(np.isnan(Term1+Term2)):
-    #     print('Term 1+2 has nan')
-    # if np.any(np.isnan(Term2 + Term3)): #THIS HAS NAN!!!
-    #     for i in range(len(Term2)):
-    #         if(np.any(np.isnan(Term2[i]+Term3[i]))):
-    #             print('nan sum:', Term2[i], Term3[i], i)
-    #             print('Term2 and Term3', Term2, Term3)
-    # if np.any(np.isnan(Term1 + Term3)):
-    #     print('Term 1+3 has nan')
     return alphal_vec

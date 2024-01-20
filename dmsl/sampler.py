@@ -6,14 +6,17 @@ import emcee
 import dill
 import pickle
 import numpy as np
-import corner
+#import corner
 import pandas as pd
-import pymc3 as pm
+#TEST
+import pymc as pm
+import matplotlib.cm
 from scipy.spatial import distance
 from scipy.stats import trim1
 import scipy.stats
+import scipy.interpolate
 from scipy.interpolate import UnivariateSpline
-import exoplanet as xo
+import exoplanet_core as xo
 import astropy.units as u
 from astropy.coordinates import SkyCoord, Galactocentric, Galactic
 from collections import Counter
@@ -28,6 +31,7 @@ from dmsl.prior import *
 
 import dmsl.lensing_model as lm
 import dmsl.mass_profile as mp
+import dmsl.mass_function as mf
 
 RHO_DM = gsh.density(8.*u.kpc)
 
@@ -36,7 +40,7 @@ class Sampler():
 
     def __init__(self, nstars=None, nsamples=1000, nchains=8, ntune=1000,
             ndims=2, minlogMl=np.log10(1e0), maxlogMl=np.log10(1e8), MassProfile=mp.PointSource(**{'Ml' :
-                1.e7*u.Msun}), SNRcutoff=10., survey=None, overwrite=True,
+                1.e7*u.Msun}),MassFunction=None, SNRcutoff=10., survey=None, overwrite=True,
             usefraction=False):
         self.nstars=nstars
         self.nsamples=nsamples
@@ -46,13 +50,14 @@ class Sampler():
         self.minlogMl = minlogMl
         self.maxlogMl = maxlogMl
         self.massprofile = MassProfile
+        self.massfunction = MassFunction
         self.SNRcutoff = SNRcutoff
         self.logradmax = 4 #pc
         self.logradmin = -4
         self.logconcmax = 8
         self.logconcmin = 0
         self.overwrite = overwrite
-        self.usefraction = usefraction
+        self.usefraction = usefraction # Also sameple for fractional dark matter, just multiple nlens with f_chi
         if survey is None:
             self.survey = Roman()
         else:
@@ -71,21 +76,44 @@ class Sampler():
         if self.overwrite:
             self.make_diagnostic_plots()
 
-    def run_inference(self):
-        npar, nwalkers = 1, self.nchains
+    def run_inference(self): #I think this initializes/checks positions for all points being sampled
+        npar_mf, npar_mp, nwalkers = 0, 0, self.nchains
         ## add number of params according to sample type
-        if self.massprofile.type != 'ps':
-            npar += self.massprofile.nparams - 1
+        if self.massfunction:
+            npar_mf += self.massfunction.nparams
+            npar_mp += self.massprofile.nparams - 1 #Remove Ml
+        else:
+            npar_mp += self.massprofile.nparams
+
         if self.usefraction:
-            npar += 1
+            npar_mp += 1
+
+        npar = npar_mf + npar_mp
+        print("Total pars:", npar)
         ## initial walker position
-        p0 = np.random.rand(nwalkers, npar)*2+self.minlogMl
-        if self.massprofile.type == 'gaussian':
-            p0[:, 1] = np.random.rand(nwalkers)*(self.logradmax-self.logradmin) + self.logradmin
-        if self.massprofile.type == 'nfw':
-            p0[:, 1] = np.random.rand(nwalkers)*(self.logconcmax-self.logconcmin) + self.logconcmin
-        if self.usefraction:
-            p0[:, -1] = np.random.rand(nwalkers)
+        if npar_mf == 0: #Only Mass-Profile tested
+            #print('Initializing mass profile')
+            p0 = np.random.rand(nwalkers, npar_mp)*2+self.minlogMl #-- Kris needed to not get stuck sampling
+            if self.massprofile.type == 'gaussian':
+                p0[:, 1] = np.random.rand(nwalkers)*(self.logradmax-self.logradmin) + self.logradmin
+            if self.massprofile.type == 'nfw':
+                p0[:, 1] = np.random.rand(nwalkers)*(self.logconcmax-self.logconcmin) + self.logconcmin
+            if self.usefraction:
+                p0[:, -1] = np.random.rand(nwalkers)
+        else:
+            #print('Initializing mass profile and mass function')
+            p0 = np.random.rand(nwalkers, npar)
+            name = self.massprofile.type
+            if(name == 'ps'):
+                p0[:, 0:] = self.initialize()
+            else:
+                p0[:, 1:] = self.initialize() #FIXME Possible shape issue if use_fraction
+            if name == 'gaussian':
+                p0[:, 0] = np.random.rand(nwalkers) * (self.logradmax - self.logradmin) + self.logradmin
+            if name == 'nfw':
+                p0[:, 0] = np.random.rand(nwalkers) * (self.logconcmax - self.logconcmin) + self.logconcmin
+            if self.usefraction: #FIXME Should work just fine -- possible shape error
+                p0[:, -1] = np.random.rand(nwalkers)
 
         ## set different likelihood if noise mcmc.
         if self.massprofile.type == 'noise':
@@ -96,25 +124,41 @@ class Sampler():
             sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike)
 
         ## run sampler
+        print("Sampling..")
         sampler.run_mcmc(p0, self.ntune+self.nsamples, progress=True)
 
         samples = sampler.get_chain(discard=self.ntune, flat=True)
-        print(f"95\% upper limit on Ml: {np.percentile(samples[:,0], 95)}")
+        print(f"95\% upper limit on c200: {np.percentile(samples[:, 1], 95)}")
+        print(f"95\% upper limit on log_Ml: {np.percentile(samples[:,0], 95)}")
+        #print(f"95\% upper limit on b: {np.percentile(samples[:, 2], 95)}")
+        #print(f"95\% upper limit on log_c: {np.percentile(samples[:, 3], 95)}")
+        #print(f"95\% upper limit on c: {np.percentile(samples[:, 4], 95)}")
+        #print(f"95\% upper limit on k_b: {np.percentile(samples[:, 5], 95)}")
+        #print(f"95\% upper limit on n_b: {np.percentile(samples[:, 6], 95)}")
+        #print(f"95\% upper limit on k_s: {np.percentile(samples[:, 6], 95)}")
+
         ## save samples to class
         self.sampler = sampler
 
-        ## save results
+        ## save results FIXME to use fstring
         if self.overwrite:
-            extra_string = f'samples_{self.survey.name}_{self.massprofile.type}'
+            if self.massfunction:
+                extra_string = f'samples_{self.survey.name}_{self.massprofile.type}_{self.massfunction.Name}'
+            else:
+                extra_string = f'samples_{self.survey.name}_{self.massprofile.type}'
             if self.usefraction == True:
                 extra_string += '_frac'
+            # print("length:", len(extra_string))
             pklpath = make_file_path(RESULTSDIR, [np.log10(self.nstars),
                 np.log10(self.nsamples), self.ndims], extra_string=
                 extra_string, ext='.pkl')
             with open(pklpath, 'wb') as buff:
                 pickle.dump(samples, buff)
             print('Wrote {}'.format(pklpath))
-            extra_string = f'loglike_{self.survey.name}_{self.massprofile.type}'
+            if self.massfunction:
+                extra_string = f'loglike_{self.survey.name}_{self.massprofile.type}_{self.massfunction.Name}'
+            else:
+                extra_string = f'loglike_{self.survey.name}_{self.massprofile.type}'
             if self.usefraction == True:
                 extra_string += '_frac'
             flatchain, __ = self.prune_chains()
@@ -125,7 +169,10 @@ class Sampler():
             with open(pklpath, 'wb') as buff:
                 pickle.dump(loglike, buff)
             print('Wrote {}'.format(pklpath))
-            extra_string = f'pruned_samples_{self.survey.name}_{self.massprofile.type}'
+            if self.massfunction:
+                extra_string = f'pruned_samples_{self.survey.name}_{self.massprofile.type}_{self.massfunction.Name}'
+            else:
+                extra_string = f'pruned_samples_{self.survey.name}_{self.massprofile.type}'
             if self.usefraction == True:
                 extra_string += '_frac'
             pklpath = make_file_path(RESULTSDIR, [np.log10(self.nstars),
@@ -135,76 +182,125 @@ class Sampler():
                 pickle.dump(np.array(flatchain), buff)
             print('Wrote {}'.format(pklpath))
 
-    def logprior(self,pars):
-        log10Ml = pars[0]
-        if (log10Ml < self.minlogMl) or (log10Ml>self.maxlogMl):
-            return -np.inf
-        if self.usefraction:
-            frac = pars[-1]
-            if (frac < 0) or (frac>1.):
+    def initialize(self):
+        nwalkers = self.nchains
+        npar_mf = self.massfunction.nparams
+        p_mf = np.empty(shape=(nwalkers, npar_mf))
+        for i in range(npar_mf):
+            p_mf[:,i] = np.random.rand(nwalkers) + self.massfunction.param_range[self.massfunction.param_names[i]][0]
+        return p_mf
+
+    def logprior(self,pars): ##Just checks if params to be sampled are within physical range
+        if not self.massfunction:
+            log10Ml = pars[0]
+            if (log10Ml < self.minlogMl) or (log10Ml>self.maxlogMl):
                 return -np.inf
-        if self.massprofile.type == 'gaussian':
-            modelpars = self.massprofile.nparams  - 1
-            for i in range(0, modelpars):
-                logradius = pars[i+1]
+            if self.usefraction:
+                frac = pars[-1]
+                if (frac < 0) or (frac>1.):
+                    return -np.inf
+            if self.massprofile.type == 'gaussian':
+                modelpars = self.massprofile.nparams  - 1
+                for i in range(0, modelpars):
+                    logradius = pars[i+1]
+                    if logradius < self.logradmin or logradius > self.logradmax:
+                        return -np.inf
+            if self.massprofile.type == 'nfw':
+                modelpars = self.massprofile.nparams  - 1
+                for i in range(0, modelpars):
+                    conc = pars[i+1] ##logconc
+                    if (conc < self.logconcmin) or (conc > self.logconcmax):
+                        return -np.inf
+        else:
+            if self.usefraction:
+                frac = pars[-1] #FIXME Figure out a final index for frac in mf case
+                if (frac < 0) or (frac>1.):
+                    return -np.inf
+            if self.massprofile.type == 'gaussian':
+                logradius = pars[0]
                 if logradius < self.logradmin or logradius > self.logradmax:
                     return -np.inf
-        if self.massprofile.type == 'nfw':
-            modelpars = self.massprofile.nparams  - 1
-            for i in range(0, modelpars):
-                conc = pars[i+1] ##logconc
+            elif self.massprofile.type == 'nfw':
+                conc = pars[0] ##logconc
                 if (conc < self.logconcmin) or (conc > self.logconcmax):
+                    # print("True inside logprior nfw")
+                    return -np.inf
+            # #Mass Function
+            for i in range(self.massfunction.nparams):
+                min = self.massfunction.param_range[self.massfunction.param_names[i]][0]
+                max = self.massfunction.param_range[self.massfunction.param_names[i]][1]
+                par = pars[i+1]
+                if par < min or par > max:
+                    #print("outside param range for:", self.massfunction, self.massfunction.param_names[i])
                     return -np.inf
         return 0.
 
     def samplealphal(self, pars):
         ## Samples p(alpha_l | M_l)
-        newmassprofile = self.make_new_mass(pars)
         if self.usefraction:
             f = pars[-1]
         else:
             f = 1.
-        log10Ml = pars[0]
+        if not self.massfunction:
+            newmassprofile = self.make_new_mass(pars)
+            log10Ml = pars[0]
 
-        Ml = 10**log10Ml
-        nlens = int(np.ceil(f*Sampler.find_nlens(Ml, self.survey)))
-        priorpdf = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
-                n=nlens)
+            Ml = 10**log10Ml
+            nlens = int(np.ceil(f*Sampler.find_nlens(Ml, self.survey)))
+            priorpdf = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
+                           n=nlens)
+        else:
+            newmassprofile, newmassfunction = self.make_new_mass(pars) #FIXME Array of new mass profiles + new mass_function
+            nlens = np.ceil(f*newmassfunction.n_l[2:])
+            priorpdf = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
+                n=sum(nlens))
+
+        if np.any(np.isnan(priorpdf)):
+            return -np.inf
+
         priorpdfspline = UnivariateSpline(np.log10(self.bs[priorpdf>0]),
                 np.log10(priorpdf[priorpdf>0]), ext='zeros', s=0)
-
-        prior = pm.distributions.continuous.Interpolated.dist(self.bs,
-                10**priorpdfspline(np.log10(self.bs)))
+        #prior = pm.
+        #prior = pm.distributions.continuous.Interpolated.dist(self.bs,10**priorpdfspline(np.log10(self.bs)))
         dists = self.rdist.rvs(self.nstars) * u.kpc
-        beff = prior.random(size=self.nstars) * dists
-
-        vl = np.array(pm.TruncatedNormal.dist(mu=0., sigma=220, lower=0,
-                        upper=550.).random(size=self.nstars))
+        x = self.bs
+        y = 10**priorpdfspline(np.log10(self.bs))
+        sci_s = scipy.interpolate.interp1d(x, y, fill_value='extrapolate')
+        sci = sci_s(x)
+        beff_p = np.random.choice(x, self.nstars, p=sci / sum(sci)) * dists
+        beff = 0.001#*dists
+        #beff = 0.001 #pm.draw(prior, draws=self.nstars)*dists #prior.random(size=self.nstars) * dists #FIXME change for pymc from pymc3 instead of prior.random() do pm.draw(prior)
+        #print('beff',beff)
+        #vl_d = np.array(pm.TruncatedNormal.dist(mu=0., sigma=220, lower=0,
+                       # upper=550.))#.random(size=self.nstars))
+        vl = scipy.stats.truncnorm.rvs(a=0, b=550., loc=0.,scale =220, size=self.nstars)
         bvec = np.zeros((self.nstars, 2))
         vvec = np.zeros((self.nstars, 2))
         if self.ndims==2:
             btheta = np.random.rand(self.nstars)* 2. * np.pi
             vtheta = np.random.rand(self.nstars)* 2. * np.pi
-            bvec[:, 0] = beff * np.cos(btheta)
-            bvec[:, 1] = beff * np.sin(btheta)
+            bvec[:, 0] = beff_p * np.cos(btheta)
+            bvec[:, 1] = beff_p * np.sin(btheta)
             vvec[:, 0] = vl * np.cos(vtheta)
             vvec[:, 1] = vl * np.sin(vtheta)
         else:
             ## default to b perp. to v. gives larger signal for NFW halo
-            bvec[:,0] = beff
+            bvec[:,0] = beff_p
             vvec[:, 1] = vl
         ## add units back in because astropy is dumb...or really probably it's
         ## me.
         bvec *= u.kpc
         vvec *= u.km / u.s
         ## get alphal given sampled other params.
-        alphal = lm.alphal(newmassprofile, bvec, vvec)
+        alphal = lm.alphal(newmassprofile, bvec, vvec) #FIXME Test if it works for new_mass function and newmassprofile array-- for loop instead?
         ## if only sampling in 1D, get magnitude of vec.
         if self.ndims == 1:
             alphal = np.linalg.norm(alphal, axis=1)
         return alphal
 
-    def snr_check(self, alphal0, pars, maxiter=100):
+    def snr_check(self, alphal0, pars, maxiter=100): #FIXME handle array as alphal0 -- only for ps
+        if ~np.any(np.isfinite(alphal0)): return "error"
+
         alphanorm = np.linalg.norm(alphal0, axis=1)
         mask = alphanorm < self.survey.alphasigma*self.SNRcutoff
         alphal = alphal0[mask, :]
@@ -223,13 +319,14 @@ class Sampler():
     def lnlike(self,pars):
         if ~np.isfinite(self.logprior(pars)):
             return -np.inf
-        alphal = self.samplealphal(pars)
-        if self.massprofile.type == 'ps':
-            ## if ps, need to do snr check and re-sample if any have too high snr. this stops walkers from getting too stuck.
-            alphal = self.snr_check(alphal, pars)
-            if alphal == "error":
-                return -np.inf
-        if np.any(np.isnan(alphal)):
+        alphal = self.samplealphal(pars) #FIXME for mf, gets array of alphal
+        # if self.massprofile.type == 'ps':
+        #     # if ps, need to do snr check and re-sample if any have too high snr. this stops walkers from getting too stuck.
+        #      alphal = self.snr_check(alphal, pars)
+        #      if alphal == "error":
+        #          return -np.inf
+        if np.any(np.isnan(alphal)): #FIXME Should not be needed!
+            # print('alphal nan')
             return -np.inf
         try:
             diff = alphal.value - self.data
@@ -267,10 +364,18 @@ class Sampler():
 
     def make_diagnostic_plots(self):
         flatchain = self.sampler.get_chain(flat=True, discard=self.ntune)
-        plot.plot_emcee(flatchain,
-                self.nstars, self.nsamples,self.ndims, self.massprofile,
-                self.survey.name, self.usefraction)
-        extra_string = f'chainsplot_{self.survey.name}_{self.massprofile.type}'
+        print('flatchain:', np.shape(flatchain))
+        if self.massfunction:
+            plot.plot_emcee(flatchain,
+                    self.nstars, self.nsamples,self.ndims, self.massprofile,
+                    self.survey.name, self.usefraction,massfunction=self.massfunction)
+            extra_string = f'chainsplot_{self.survey.name}_{self.massprofile.type}_{self.massfunction.Name}'
+        else:
+            plot.plot_emcee(flatchain,
+                            self.nstars, self.nsamples, self.ndims, self.massprofile,
+                            self.survey.name, self.usefraction)
+            extra_string = f'chainsplot_{self.survey.name}_{self.massprofile.type}'
+
         if self.usefraction == True:
             extra_string += '_frac'
         outpath = make_file_path(RESULTSDIR, [np.log10(self.nstars),
@@ -278,7 +383,10 @@ class Sampler():
             extra_string= extra_string,
             ext='.png')
         plot.plot_chains(self.sampler.get_chain(), outpath)
-        extra_string = f'logprob_{self.survey.name}_{self.massprofile.type}'
+        if self.massfunction:
+            extra_string = f'logprob_{self.survey.name}_{self.massprofile.type}_{self.massfunction.Name}'
+        else:
+            extra_string = f'logprob_{self.survey.name}_{self.massprofile.type}'
         if self.usefraction == True:
             extra_string += '_frac'
         outpath = make_file_path(RESULTSDIR, [np.log10(self.nstars),
@@ -303,22 +411,80 @@ class Sampler():
         self.flatchain = flatchain
         return flatchain, loglike
 
-    def make_new_mass(self,pars):
+    def make_new_mass(self,pars): #FIXME For mf does this need to be mf + mp? or just mf?
         mptype = self.massprofile.type
         kwargs = self.massprofile.kwargs
+        i = 1
+        if self.massfunction:
+            if mptype == 'ps':
+                i = 0
+            mftype = self.massfunction.Name
+            if mftype == 'PowerLaw':
+                logalpha = pars[i+0]
+                logM0 = pars[i+1]
+                newmf = mf.PowerLaw(logM_0=logM0, logalpha=logalpha)
+            elif mftype == 'Tinker':
+                A = pars[i+0]
+                a = pars[i+1]
+                b = pars[i+2]
+                c = pars[i+3]
+                k_b = pars[i+4]
+                n_b = pars[i+5]
+                k_s = pars[i+6]
+                newmf = mf.Tinker(A= A, a= a, b= b, c= c, k_b=k_b, n_b=n_b, k_s=k_s)
+            elif mftype == 'CDM':
+                loga = pars[i+0]
+                #b = pars[i+1]
+                #logc = pars[i+2]
+                newmf = mf.CDM(loga = loga)#,b = b,logc = logc)
+            elif mftype == 'WDM Stream':
+                m_wdm = pars[i+0]
+                gamma = pars[i+1]
+                beta = pars[i+2]
+                #loga_cdm = pars[i+3]
+                #b_cdm = pars[i+4]
+                #logc_cdm =pars[i+5]
+                newmf = mf.WDM_stream(m_wdm=m_wdm,gamma=gamma, beta=beta)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
+            #else:
+             #   raise NotImplementedError("""Need to add this mass function to
+              #  sampler.""")
 
-        if mptype == 'ps':
-            kwargs['Ml'] = 10**pars[0]*u.Msun
-            newmp = mp.PointSource(**kwargs)
-        elif mptype == 'gaussian':
-            kwargs['Ml'] = 10**pars[0]*u.Msun
-            kwargs['R0'] = 10**pars[1]*u.pc
-            newmp = mp.Gaussian(**kwargs)
-        elif mptype == 'nfw':
-            kwargs['Ml'] = 10**pars[0]*u.Msun
-            kwargs['c200'] = 10**pars[1]
-            newmp = mp.NFW(**kwargs)
+            if mptype == 'ps':
+                newmp = []
+                for newmf_ml in newmf.m_l[2:]:
+                    kwargs['Ml'] = newmf_ml*u.Msun
+                    newmp.append(mp.PointSource(**kwargs))
+            elif mptype == 'gaussian':
+                # kwargs['R0'] = 10**pars[0]*u.pc
+                newmp = []
+                for newmf_ml in newmf.m_l[2:]:
+                    kwargs['Ml'] = newmf_ml * u.Msun
+                    newmp.append(mp.Gaussian(**kwargs))
+                #newmp = mp.Gaussian(**kwargs)
+            elif mptype == 'nfw':
+                kwargs['c200'] = 10**pars[0]
+                newmp = []
+                for newmf_ml in newmf.m_l[2:]:
+                    kwargs['Ml'] = newmf_ml * u.Msun
+                    newmp.append(mp.PointSource(**kwargs))
+                newmp = mp.NFW(**kwargs)
+            else:
+                raise NotImplementedError("""Need to add this mass profile/mass function to
+                sampler.""")
+            return newmp, newmf #Array of mp
         else:
-            raise NotImplementedError("""Need to add this mass profile to
-            sampler.""")
+            if mptype == 'ps':
+                kwargs['Ml'] = 10**pars[0]*u.Msun
+                newmp = mp.PointSource(**kwargs)
+            elif mptype == 'gaussian':
+                kwargs['Ml'] = 10**pars[0]*u.Msun
+                kwargs['R0'] = 10**pars[1]*u.pc
+                newmp = mp.Gaussian(**kwargs)
+            elif mptype == 'nfw':
+                kwargs['Ml'] = 10**pars[0]*u.Msun
+                kwargs['c200'] = 10**pars[1]
+                newmp = mp.NFW(**kwargs)
+            else:
+                raise NotImplementedError("""Need to add this mass profile to
+                sampler.""")
         return newmp

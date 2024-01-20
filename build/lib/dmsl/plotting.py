@@ -6,18 +6,17 @@ Makes plots
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-import pymc as pm
+import pymc3 as pm
 import seaborn as sns
 import corner
 import numpy as np
 import pandas as pd
 import scipy
-import arviz as az
 
 from datetime import datetime
 from dmsl.convenience import flatten, prange, make_file_path
 from dmsl.paths import *
-#from pymc.backends.tracetab import trace_to_dataframe
+from pymc3.backends.tracetab import trace_to_dataframe
 
 def paper_plot():
     sns.set_context("paper")
@@ -38,114 +37,56 @@ def paper_plot():
     return cs
 
 def plot_emcee(flatchain,nstars, nsamples,ndims, massprofile, surveyname,
-        usefraction,massfunction=None):
+        usefraction):
     massprofiletype = massprofile.type
     kwargs = massprofile.kwargs
     flatchain = np.array(flatchain)
     if usefraction:
         kwargs['f'] = 0
-    if massfunction is not None:
-        massfunctiontype = massfunction.Name
-        mf_args = massfunction.param_names
-        for i in range(len(mf_args)):
-            print(mf_args[i])
-            es = f'post_{surveyname}_{massprofiletype}_{massfunctiontype}_{mf_args[i]}' #TODO change wdm,pl,cdm
-            # extra_string = f'post_{surveyname}_{massprofiletype}_{arg}'
-            if usefraction:
-                es += '_frac'
-            outpath = make_file_path(RESULTSDIR, [np.log10(nstars), np.log10(nsamples), ndims],
-                                     extra_string=es, ext='.png')
-            plt.close('all')
-            paper_plot()
-            fig = plt.figure()
-            try:
-                up95 = np.percentile(flatchain[:, i+1], 90)
-                plt.hist(flatchain[:, i+1], 20, color="k", histtype="step", density=True);
-            except:
-                up95 = np.percentile(flatchain, 90)
-                plt.hist(flatchain, 20, color="k", histtype="step", density=True);
-            plt.axvline(up95)
-            plt.xlabel(f'${mf_args[i]}$');
-            plt.ylabel(f'$p({mf_args[i]})$');
-            savefig(fig, outpath, writepdf=0, dpi=100)
+    for key in kwargs.keys():
+        print(key)
+        extra_string = f'post_{surveyname}_{massprofiletype}_{key}'
+        if usefraction:
+            extra_string += '_frac'
+        outpath = make_file_path(RESULTSDIR, [np.log10(nstars),
+            np.log10(nsamples), ndims],
+                extra_string=extra_string,
+                ext='.png')
         plt.close('all')
         paper_plot()
+        i = 0
+        if key == 'Ml': i  = 0
+        else: i = 1
         fig = plt.figure()
-        i =0 #c200 for NFW
         try:
-            up95 = np.percentile(flatchain[:, i], 90)
+            up95 = np.percentile(flatchain[:,i],90)
             plt.hist(flatchain[:, i], 50, color="k", histtype="step", density=True);
         except:
             up95 = np.percentile(flatchain, 90)
             plt.hist(flatchain, 50, color="k", histtype="step", density=True);
         plt.axvline(up95)
-        plt.xlabel(r'$\\log_{{10}} {c200}$');
-        plt.ylabel('$p({c200})$');
-        outpath = make_file_path(RESULTSDIR, [np.log10(nstars), np.log10(nsamples), ndims],
-                                 extra_string=f'post_{surveyname}_{massprofiletype}_{massfunctiontype}_c200', ext='.png') #TODO change wdm,pl,cdm
+        if key == 'f':
+            plt.xlabel(r'$f$');
+        else:
+            plt.xlabel(f'$\\log_{{10}} {key}$');
+        plt.ylabel(f'$p({key})$');
         savefig(fig, outpath, writepdf=0, dpi=100)
-    else:
-        for key in kwargs.keys():
-            print(key)
-            # if massfunction:
-            #     extra_string = f'post_{surveyname}_{massprofiletype}_{massfunctiontype}_{key}'
-            #     es = f'post_test_pspl_{key}_{arg}'
-            # else:
-            extra_string = f'post_{surveyname}_{massprofiletype}_{key}'
-                # es = f'post_test_ps_{key}_{arg}'
-            if usefraction:
-                extra_string += '_frac'
-            outpath = make_file_path(RESULTSDIR, [np.log10(nstars),np.log10(nsamples), ndims],
-                    extra_string=extra_string, ext='.png')
-            plt.close('all')
-            paper_plot()
-            i = 0
-            if key == 'Ml': i  = 0
-            else: i = 1
-            fig = plt.figure()
-            try:
-                up95 = np.percentile(flatchain[:,i],90)
-                plt.hist(flatchain[:, i], 20, color="k", histtype="step", density=True);
-            except:
-                up95 = np.percentile(flatchain, 90)
-                plt.hist(flatchain, 20, color="k", histtype="step", density=True);
-            plt.axvline(up95)
-            if key == 'f':
-                plt.xlabel(r'$f$');
-            else:
-                plt.xlabel(f'$\\log_{{10}} {key}$');
-            plt.ylabel(f'$p({key})$');
-            savefig(fig, outpath, writepdf=0, dpi=100)
     plt.close('all')
-    paper_plot()
-    # fig = corner.corner(flatchain, labels=['$\\log_{{10}} {c200}$', '$M_{wdm}$','$\\gamma$','$\\beta$',
-    #                                        '$\\log_{{10}} {a_{cdm}}$','$b_{cdm}$','$\\log_{{10}} {c_{cdm}}$'],#['$\\log_{{10}} {a}$','$b$','$\\log_{{10}} {c}$'], #['$\\log_{{10}} {\\alpha}$','$\\log_{{10}} {M_0}$'],
-    fig = corner.corner(flatchain, labels=['$\\log_{{10}} {M_l}$','$\\log_{{10}} {c200}$'],# '$\\log_{{10}} {a}$'],#,'$b$','$\\log_{{10}} {c}$'],
-                        # TODO match names to mass function params, mass_function.py
-                        quantiles=[0.025, 0.975], fill_contours=True,show_titles=True,
-                        contourf_kwargs={'colors': None, 'cmap': 'Blues'}, title_kwargs={"fontsize": 16},
-                        label_kwargs={"fontsize": 20})  # FIXME for general case
-    #corner.overplot_lines(fig, np.array([None, np.log10(3.26 * 10 ** -5)]), color="r")
-    if massfunction is not None:
-        extra_string = f'corner_{surveyname}_{massprofiletype}_{massfunctiontype}'
-        #es = f'corner_test_nfw_wdm' #TODO change wdm,pl,cdm
-    else:
-        extra_string = f'corner_{surveyname}_{massprofiletype}'
-        #es = f'corner_test_nfw_wdm' #TODO change wdm,pl,cdm
+    fig = corner.corner(flatchain)
+    extra_string = f'corner_{surveyname}_{massprofiletype}'
     if usefraction:
         extra_string += '_frac'
     outpath = make_file_path(RESULTSDIR, [np.log10(nstars),
         np.log10(nsamples), ndims],
         extra_string=extra_string, ext='.png')
-    savefig(fig, outpath, writepdf=0, dpi=200)
+    savefig(fig, outpath, writepdf=0, dpi=100)
 
 def plot_chains(samples, outpath):
     plt.close('all')
     paper_plot()
     fig = plt.figure()
     plt.plot(samples[:,:,0])
-    plt.ylabel(r'$\\log_{{10}} {c200}$');
-    #plt.ylabel(r'$m_{wdm}$');
+    plt.ylabel(r'$\log_{10} M_l$');
     plt.xlabel(r'N');
     savefig(fig, outpath, writepdf=0, dpi=100)
 
@@ -216,17 +157,10 @@ def plot_corner(trace, outpath):
     # corner plot of posterior samples
     plt.close('all')
     corvars = [x for x in trace.varnames if x[-1] != '_']
-    #trace_df = trace_to_dataframe(trace, varnames=corvars)
-    trace_df = az.convert_to_inference_data(obj=trace).to_dataframe(include_coords=corvars)
-    # fig = corner.corner(trace_df,quantiles=[0.16, 0.5, 0.84],
-    #                     show_titles=True, title_kwargs={"fontsize": 12},
-    #                     title_fmt='.2g')
-    fig = corner.corner(trace_df, labels=['$\\log_{{10}} {c200}$', '$\\log_{{10}} {a}$'],#,'$b$','$\\log_{{10}} {c}$'],
-                        # TODO match names to mass function params, mass_function.py
-                        quantiles=[0.025, 0.975], fill_contours=True,show_titles=True,
-                        contourf_kwargs={'colors': None, 'cmap': 'Blues'}, title_kwargs={"fontsize": 16},
-                        label_kwargs={"fontsize": 20})
-    corner.overplot_lines(fig,np.array(None,3.26*10**-5),color="r")
+    trace_df = trace_to_dataframe(trace, varnames=corvars)
+    fig = corner.corner(trace_df,quantiles=[0.16, 0.5, 0.84],
+                        show_titles=True, title_kwargs={"fontsize": 12},
+                        title_fmt='.2g')
     savefig(fig, outpath, writepdf=0, dpi=100)
 
 def savefig(fig, figpath, writepdf=True, dpi=450):

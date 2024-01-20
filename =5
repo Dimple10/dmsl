@@ -1,0 +1,64 @@
+Collecting package metadata (current_repodata.json): ...working... done
+Solving environment: ...working... failed with initial frozen solve. Retrying with flexible solve.
+Solving environment: ...working... failed with repodata from current_repodata.json, will retry with next repodata source.
+Collecting package metadata (repodata.json): ...working... done
+Solving environment: ...working... done
+
+## Package Plan ##
+
+  environment location: /Users/fangirl/miniconda3/envs/projectclone
+
+  added / updated specs:
+    - pymc
+
+
+The following packages will be downloaded:
+
+    package                    |            build
+    ---------------------------|-----------------
+    arviz-0.13.0               |     pyhd8ed1ab_0         1.4 MB  conda-forge
+    ca-certificates-2023.7.22  |       h8857fd0_0         146 KB  conda-forge
+    certifi-2023.7.22          |     pyhd8ed1ab_0         150 KB  conda-forge
+    cloudpickle-2.2.1          |     pyhd8ed1ab_0          27 KB  conda-forge
+    cons-0.4.6                 |     pyhd8ed1ab_0          14 KB  conda-forge
+    etuples-0.3.9              |     pyhd8ed1ab_0          17 KB  conda-forge
+    logical-unification-0.4.6  |     pyhd8ed1ab_0          18 KB  conda-forge
+    minikanren-1.0.3           |     pyhd8ed1ab_0          23 KB  conda-forge
+    multipledispatch-0.6.0     |             py_0          12 KB  conda-forge
+    openssl-1.1.1u             |       h8a1eda9_0         1.7 MB  conda-forge
+    pymc-5.3.0                 |       hd8ed1ab_0          11 KB  conda-forge
+    pymc-base-5.3.0            |     pyhd8ed1ab_0         295 KB  conda-forge
+    pytensor-2.11.1            |   py38h4cd09af_0           9 KB  conda-forge
+    pytensor-base-2.11.1       |   py38h4cd09af_0         3.4 MB  conda-forge
+    toolz-0.12.0               |     pyhd8ed1ab_0          48 KB  conda-forge
+    xarray-einstats-0.5.1      |     pyhd8ed1ab_0          30 KB  conda-forge
+    ------------------------------------------------------------
+                                           Total:         7.3 MB
+
+The following NEW packages will be INSTALLED:
+
+  cloudpickle        conda-forge/noarch::cloudpickle-2.2.1-pyhd8ed1ab_0
+  cons               conda-forge/noarch::cons-0.4.6-pyhd8ed1ab_0
+  etuples            conda-forge/noarch::etuples-0.3.9-pyhd8ed1ab_0
+  logical-unificati~ conda-forge/noarch::logical-unification-0.4.6-pyhd8ed1ab_0
+  minikanren         conda-forge/noarch::minikanren-1.0.3-pyhd8ed1ab_0
+  multipledispatch   conda-forge/noarch::multipledispatch-0.6.0-py_0
+  pymc               conda-forge/noarch::pymc-5.3.0-hd8ed1ab_0
+  pymc-base          conda-forge/noarch::pymc-base-5.3.0-pyhd8ed1ab_0
+  pytensor           conda-forge/osx-64::pytensor-2.11.1-py38h4cd09af_0
+  pytensor-base      conda-forge/osx-64::pytensor-base-2.11.1-py38h4cd09af_0
+  toolz              conda-forge/noarch::toolz-0.12.0-pyhd8ed1ab_0
+  xarray-einstats    conda-forge/noarch::xarray-einstats-0.5.1-pyhd8ed1ab_0
+
+The following packages will be UPDATED:
+
+  arviz                pkgs/main::arviz-0.11.2-pyhd3eb1b0_0 --> conda-forge::arviz-0.13.0-pyhd8ed1ab_0
+  ca-certificates    pkgs/main::ca-certificates-2023.05.30~ --> conda-forge::ca-certificates-2023.7.22-h8857fd0_0
+  certifi            pkgs/main/osx-64::certifi-2023.5.7-py~ --> conda-forge/noarch::certifi-2023.7.22-pyhd8ed1ab_0
+
+The following packages will be SUPERSEDED by a higher-priority channel:
+
+  openssl              pkgs/main::openssl-1.1.1u-hca72f7f_0 --> conda-forge::openssl-1.1.1u-h8a1eda9_0
+
+
+Proceed ([y]/n)? 
