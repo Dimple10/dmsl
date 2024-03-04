@@ -76,7 +76,7 @@ class Sampler():
         if self.overwrite:
             self.make_diagnostic_plots()
 
-    def run_inference(self): #I think this initializes/checks positions for all points being sampled
+    def run_inference(self):
         npar_mf, npar_mp, nwalkers = 0, 0, self.nchains
         ## add number of params according to sample type
         if self.massfunction:
@@ -123,24 +123,61 @@ class Sampler():
         else:
             sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike)
 
-        ## run sampler
+        # Burn-in
+        # state = sampler.sample(p0, 100)
+        # sampler.reset()
+
+        ##Testing auto-correlation time for samples
+        max_n = self.ntune+self.nsamples
+        # We'll track how the average autocorrelation time estimate changes
+        index = 0
+        autocorr = np.empty(max_n)
+        old_tau = np.inf
+        # Now we'll sample for up to max_n steps
         print("Sampling..")
-        sampler.run_mcmc(p0, self.ntune+self.nsamples, progress=True)
+        ctr = 0
+        for sample in sampler.sample(p0, iterations=max_n, progress=True):
+            # Only check convergence every 100 steps
+            if sampler.iteration % 100:
+                continue
+
+            # Compute the autocorrelation time so far
+            # Using tol=0 means that we'll always get an estimate even
+            # if it isn't trustworthy
+            tau = sampler.get_autocorr_time(tol=0)
+            autocorr[index] = np.mean(tau)
+            index += 1
+
+            # Check convergence
+            converged = np.all(tau * 50 < sampler.iteration)
+            converged &= np.all(np.abs(old_tau - tau) / tau < 0.01)
+            if converged and ctr==0:
+                print('Converged at..', sampler.iteration)
+                ctr+=1
+            old_tau = tau
+
+        ## run sampler
+        #print("Sampling..")
+        #sampler.run_mcmc(p0, self.ntune+self.nsamples, progress=True)
+        # burnin = int(2 * np.max(old_tau))
+        # thin = int(0.5 * np.min(old_tau))
+        # print("burn-in: {0}".format(burnin))
+        # print("thin: {0}".format(thin))
 
         samples = sampler.get_chain(discard=self.ntune, flat=True)
-        print(f"95\% upper limit on c200: {np.percentile(samples[:, 1], 95)}")
-        print(f"95\% upper limit on log_Ml: {np.percentile(samples[:,0], 95)}")
-        #print(f"95\% upper limit on b: {np.percentile(samples[:, 2], 95)}")
-        #print(f"95\% upper limit on log_c: {np.percentile(samples[:, 3], 95)}")
-        #print(f"95\% upper limit on c: {np.percentile(samples[:, 4], 95)}")
-        #print(f"95\% upper limit on k_b: {np.percentile(samples[:, 5], 95)}")
-        #print(f"95\% upper limit on n_b: {np.percentile(samples[:, 6], 95)}")
+        print(f"95\% upper limit on c200: {np.percentile(samples[:, 0], 95)}")
+        print(f"95\% upper limit on loga: {np.percentile(samples[:,1], 95)}")
+        print(f"95\% upper limit on b: {np.percentile(samples[:, 2], 95)}")
+        print(f"95\% upper limit on logc: {np.percentile(samples[:, 3], 95)}")
+        # print(f"95\% upper limit on loga_cdm: {np.percentile(samples[:, 4], 95)}")
+        # print(f"95\% upper limit on b_cdm: {np.percentile(samples[:, 5], 95)}")
+        # print(f"95\% upper limit on logc_cdm: {np.percentile(samples[:, 6], 95)}")
         #print(f"95\% upper limit on k_s: {np.percentile(samples[:, 6], 95)}")
 
         ## save samples to class
         self.sampler = sampler
 
-        ## save results FIXME to use fstring
+        ## save results
         if self.overwrite:
             if self.massfunction:
                 extra_string = f'samples_{self.survey.name}_{self.massprofile.type}_{self.massfunction.Name}'
@@ -363,7 +400,8 @@ class Sampler():
         print('Prior loaded')
 
     def make_diagnostic_plots(self):
-        flatchain = self.sampler.get_chain(flat=True, discard=self.ntune)
+        #flatchain = self.sampler.get_chain(flat=True, discard=self.ntune)
+        flatchain, __ = self.prune_chains()
         print('flatchain:', np.shape(flatchain))
         if self.massfunction:
             plot.plot_emcee(flatchain,
@@ -382,7 +420,7 @@ class Sampler():
             np.log10(self.nsamples), self.ndims],
             extra_string= extra_string,
             ext='.png')
-        plot.plot_chains(self.sampler.get_chain(), outpath)
+        plot.plot_chains(self.sampler.get_chain(), outpath) #Shape: (samples, chains, params)
         if self.massfunction:
             extra_string = f'logprob_{self.survey.name}_{self.massprofile.type}_{self.massfunction.Name}'
         else:
@@ -434,17 +472,22 @@ class Sampler():
                 newmf = mf.Tinker(A= A, a= a, b= b, c= c, k_b=k_b, n_b=n_b, k_s=k_s)
             elif mftype == 'CDM':
                 loga = pars[i+0]
-                #b = pars[i+1]
-                #logc = pars[i+2]
-                newmf = mf.CDM(loga = loga)#,b = b,logc = logc)
+                b = pars[i+1]
+                logc = pars[i+2]
+                newmf = mf.CDM(loga = loga, b = b,logc = logc)
             elif mftype == 'WDM Stream':
                 m_wdm = pars[i+0]
                 gamma = pars[i+1]
                 beta = pars[i+2]
-                #loga_cdm = pars[i+3]
-                #b_cdm = pars[i+4]
-                #logc_cdm =pars[i+5]
+                # loga_cdm = pars[i+3]
+                # b_cdm = pars[i+4]
+                # logc_cdm =pars[i+5]
                 newmf = mf.WDM_stream(m_wdm=m_wdm,gamma=gamma, beta=beta)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
+            elif mftype == 'Press Schechter':
+                del_crit = pars[i+0]
+                #b = pars[i+1]
+                #logc = pars[i+2]
+                newmf = mf.PressSchechter_test(del_crit = del_crit)#,b = b,logc = logc)
             #else:
              #   raise NotImplementedError("""Need to add this mass function to
               #  sampler.""")

@@ -32,9 +32,9 @@ def make_file_path(directory, array_kwargs, extra_string=None, ext='.dat'):
         s = '_'
         string_kwargs = [str(int(i)) for i in array_kwargs]
         string_kwargs = np.array(string_kwargs, dtype='U45')
-        if (extra_string !=None) and (len(extra_string)>45):
+        if (extra_string !=None) and (len(extra_string)>50):
             print("len in convenience:",len(extra_string))
-            raise TypeError('Extra string must have less than 45 characters')
+            raise TypeError('Extra string must have less than 50 characters')
         if extra_string !=None:
             string_kwargs = np.insert(string_kwargs, 0, extra_string)
         kwpath = s.join(string_kwargs)

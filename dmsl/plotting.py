@@ -37,7 +37,7 @@ def paper_plot():
     cs = plt.rcParams['axes.prop_cycle'].by_key()['color']
     return cs
 
-def plot_emcee(flatchain,nstars, nsamples,ndims, massprofile, surveyname,
+def plot_emcee(flatchain, nstars, nsamples,ndims, massprofile, surveyname,
         usefraction,massfunction=None):
     massprofiletype = massprofile.type
     kwargs = massprofile.kwargs
@@ -49,7 +49,7 @@ def plot_emcee(flatchain,nstars, nsamples,ndims, massprofile, surveyname,
         mf_args = massfunction.param_names
         for i in range(len(mf_args)):
             print(mf_args[i])
-            es = f'post_{surveyname}_{massprofiletype}_{massfunctiontype}_{mf_args[i]}' #TODO change wdm,pl,cdm
+            es = f'post_{surveyname}_{massprofiletype}_{massfunctiontype}_{mf_args[i]}'
             # extra_string = f'post_{surveyname}_{massprofiletype}_{arg}'
             if usefraction:
                 es += '_frac'
@@ -118,14 +118,14 @@ def plot_emcee(flatchain,nstars, nsamples,ndims, massprofile, surveyname,
             savefig(fig, outpath, writepdf=0, dpi=100)
     plt.close('all')
     paper_plot()
-    # fig = corner.corner(flatchain, labels=['$\\log_{{10}} {c200}$', '$M_{wdm}$','$\\gamma$','$\\beta$',
-    #                                        '$\\log_{{10}} {a_{cdm}}$','$b_{cdm}$','$\\log_{{10}} {c_{cdm}}$'],#['$\\log_{{10}} {a}$','$b$','$\\log_{{10}} {c}$'], #['$\\log_{{10}} {\\alpha}$','$\\log_{{10}} {M_0}$'],
-    fig = corner.corner(flatchain, labels=['$\\log_{{10}} {M_l}$','$\\log_{{10}} {c200}$'],# '$\\log_{{10}} {a}$'],#,'$b$','$\\log_{{10}} {c}$'],
+    #fig = corner.corner(flatchain, labels=['$\\log_{{10}} {c200}$', '$M_{wdm}$','$\\gamma$','$\\beta$'],
+                                            #'$\\log_{{10}} {a_{cdm}}$','$b_{cdm}$','$\\log_{{10}} {c_{cdm}}$'],#['$\\log_{{10}} {a}$','$b$','$\\log_{{10}} {c}$'],
+    fig = corner.corner(flatchain, labels=['$\\log_{{10}} {c200}$','$\\log_{{10}} {a}$','$b$','$\\log_{{10}} {c}$'],
                         # TODO match names to mass function params, mass_function.py
                         quantiles=[0.025, 0.975], fill_contours=True,show_titles=True,
                         contourf_kwargs={'colors': None, 'cmap': 'Blues'}, title_kwargs={"fontsize": 16},
                         label_kwargs={"fontsize": 20})  # FIXME for general case
-    #corner.overplot_lines(fig, np.array([None, np.log10(3.26 * 10 ** -5)]), color="r")
+    #corner.overplot_lines(fig, np.array([None, np.log10(3.26 * 10 ** -5),None,None]), color="r")
     if massfunction is not None:
         extra_string = f'corner_{surveyname}_{massprofiletype}_{massfunctiontype}'
         #es = f'corner_test_nfw_wdm' #TODO change wdm,pl,cdm

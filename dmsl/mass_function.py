@@ -198,12 +198,11 @@ class CDM(MassFunction):
     den_n_l: list = field(default_factory=lambda: np.zeros((100)))
     n_l: list = field(default_factory=lambda: np.zeros((100)))
     loga: float = np.log10(3.26*10**-5)
-    #loga: float = np.log10(2.02*10**-13)
     b: float = -1.9
-    logc: float = np.log10(2.57*10**7)
-    nparams: int = 1
-    param_names: list = field(default_factory=lambda:['loga'])#, 'b', 'logc'])#TODO make sure it calls a/c not just the log
-    param_range: dict = field(default_factory=lambda: {'loga':(-8, 0)})#, 'b': (-6, -0.1), 'logc':(4, 9)})
+    logc: float =np.log10(2.57*10**7)
+    nparams: int = 3
+    param_names: list = field(default_factory=lambda:['loga', 'b', 'logc'])
+    param_range: dict = field(default_factory=lambda: {'loga':(-9, 2), 'b': (-6, -0.1), 'logc':(1, 12)})
 
     def find_Nl(self):
         self.den_n_l = (10**self.loga) * ((self.m_l/(10**self.logc))** self.b) ##Units of M_sun^-1
@@ -215,10 +214,7 @@ class CDM(MassFunction):
         N = np.diff(integr, prepend=integr[0]) #CUMULATIVE TRAPZ ADDS PREVIOUS VAL TO EACH CURRENT VAL SO DIFF
         m_dm = np.sum(N * self.m_l) * u.Msun
         m_sur = Rho_dm * vol
-        #print("m-sur: ", m_sur)
-        #print('m_dm: ', m_dm)
         norm = m_sur / m_dm
-        #print('Norm:', norm)
         self.n_l = norm * N
 
     def __post_init__(self):
@@ -245,9 +241,8 @@ class WDM_stream(MassFunction):
     d :float = 2.66
     nparams: int = 3 #m_wdm, gamma, beta
     param_names: list = field(default_factory=lambda:['m_wdm', 'gamma', 'beta'])#, 'loga_cdm','b_cdm','logc_cdm'])
-    param_range: dict = field(default_factory=lambda:{'m_wdm': (1,50),'gamma': (0.01, 100), 'beta':(0.001, 50)})#,
+    param_range: dict = field(default_factory=lambda:{'m_wdm': (0.01,200),'gamma': (0.01, 50), 'beta':(0,3)})#,
                                                      # 'loga_cdm':(-8, 2), 'b_cdm': (-4, -0.01), 'logc_cdm':(4, 10)})
-    #print(param_range)
     def calc_Mhm(self):
         self.M_hm = self.a * (self.m_wdm)** self.b * (self.omega_wdm/0.25)**self.c #* (h/0.7)**2.66
 
@@ -300,66 +295,182 @@ class WDM_lensing(MassFunction):
         self.den_n_l = self.den_n_l / self.m_l
 
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
-        new_n = []
-        new_m = 10 ** ((np.log10(self.m_l[1:]) + np.log10(self.m_l[:-1])) / 2)
-        for i in range(len(self.den_n_l) - 1):
-            mtemp = [self.m_l[i], self.m_l[i + 1]]
-            ntemp = [self.den_n_l[i], self.den_n_l[i + 1]]
-            n = scipy.interpolate.interp1d(np.log10(mtemp), np.log10(ntemp))
-            integrand = lambda m: 10 ** n(np.log10(m))
-            new_n.append(scipy.integrate.quad(integrand, mtemp[0], mtemp[1])[0])
-        temp = scipy.interpolate.interp1d(np.log10(new_m), np.log10(new_n), fill_value='extrapolate')
-        N = 10 ** temp(np.log10(self.m_l))
+        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
+        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l, initial=integr[0])
+        N = np.diff(integr, prepend=integr[0])
+        m_dm = np.sum(N * self.m_l) * u.Msun
+        m_sur = Rho_dm * vol
+        norm = m_sur / m_dm
+        print(norm, m_dm)
+        self.n_l = norm * N
+
+    def __post_init__(self):
+        self.calc_Mhm()
+        self.find_Nl()
+
+
+@dataclass
+class PressSchechter(MassFunction):
+    Name: str = 'Press Schechter'
+    m_l: list = field(default_factory=lambda: np.logspace(4, 12, 100))
+    den_n_l: list = field(default_factory=lambda: np.zeros((100)))
+    n_l: list = field(default_factory=lambda: np.zeros((100)))
+    sig: list = field(default_factory=lambda: [1 for i in range(100)])
+    der: list = field(default_factory=lambda: [1 for i in range(100)])
+    R: list = field(default_factory=lambda: [1 for i in range(100)])
+    del_crit: float = 1.686
+    nparams: int = 1
+    param_names: list = field(default_factory=lambda:['del_crit'])
+    param_range: dict = field(default_factory=lambda:{'del_crit':(0.01,4)})
+
+    def getPk(self,k): #Analytic fit from statsmodel to CLASS P(k)
+        return 10**(1.5673598289074357 + np.log10(k)*-2.190072492256715 +np.log10(k)**2 *-0.46130280750744995)
+
+    def radius(self):
+        self.R = (3*self.m_l * u.M_sun/ (4 * np.pi * (Rho_mean.to(u.M_sun/u.pc**3)))) ** (1 / 3)
+        return self.R
+
+    def func(self,k):
+        f_1 = 1/(2*np.pi**2) #1/k  #In units of u.Mpc
+        f_2 = 3 / ((k * (1 / u.Mpc) * self.R).to('') ** 3)#* self.D2[k] ** 2
+        f_3 = np.sin((k * (1 / u.Mpc) * self.R).to('') * u.rad) - (k * (1 / u.Mpc) * self.R).to('') * np.cos(
+            (k * (1 / u.Mpc) * self.R).to('') * u.rad)
+        f = (np.abs(f_2 * f_3) ** 2 * f_1).to('')
+        return f
+
+    def calc_sig(self):
+        integrand = lambda k: self.func(k)* k**2 * self.getPk(k)
+        f_1 = quad_vec(integrand, 1e-3, 100000, limit=100)
+        for i in range(len(self.sig)):
+            self.sig[i] = np.sqrt(f_1[0][i]).to('')
+        return self.sig
+
+    def func_der(self,k): #W(kR)*dW/dR* 1/2pi**2
+        f_1 = 1/(2*np.pi**2) * u.Mpc # multiplying w/ Mpc to get units to cancel but they match analytically!
+        f_2 =  3 / ((k * (1 / u.Mpc) * self.R).to('') ** 3)#
+        f_3 = np.sin((k * (1 / u.Mpc) * self.R).to('') * u.rad) - (k * (1 / u.Mpc) * self.R).to('') * np.cos(
+            (k * (1 / u.Mpc) * self.R).to('') * u.rad) ##Window function
+        f_4 = (-3 / self.R.value) * 1/u.Mpc *(u.Mpc / u.pc).to('') * np.sin((k * (1 / u.Mpc) * self.R).to('') * u.rad)
+        f_5 = 3 * (k * (1 / u.Mpc)) * np.cos((k * (1 / u.Mpc) * self.R).to('') * u.rad)
+        f_6 = 1/u.Mpc * (k ** 2 * (1 / u.Mpc) * self.R).to('') * np.sin((k * (1 / u.Mpc) * self.R).to('') * u.rad)
+        f = ((f_2 * np.abs(f_3)) * f_1 * f_2 * (f_4 + f_5 + f_6)).to('')
+        return f #* self.phi(k)
+
+    def der_sig(self): #Gives 2sig *dsig/dR
+        integrand_der = lambda k: self.func_der(k) * k**2 * self.getPk(k)
+        f_1 = quad_vec(integrand_der, 1e-3, 100000, limit=100)
+        self.der = f_1[0]
+        return self.der #units of 1/u.Mpc
+
+    def find_Nl(self): #incorporating dR/dM in dlnsig/dM to get dn/dM
+        for i in range(len(self.n_l)): ##n_l units of 1/Mpc**3
+            self.den_n_l[i] = np.abs((4 / 3 * np.pi * (Rho_mean.to(u.M_sun/u.Mpc**3).value)) ** (-1 / 3) * 1/3 * (self.m_l[i]) ** (-2 / 3)* \
+                              self.m_l[i]/(2*(self.sig[i]**2)) * self.der[i]) * \
+                              np.sqrt(2/np.pi) * (Rho_mean.to(u.M_sun/u.Mpc**3).value)/self.m_l[i]*\
+                              self.del_crit/self.sig[i]*np.exp(-self.del_crit**2/(2*self.sig[i]**2))
+
+        #Calculating the normalization
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
+        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
+        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l, initial=integr[0])
+        N = np.diff(integr,prepend=integr[0])
+        N *= (u.Mpc) ** -3
+        N = (N * vol).to('')
         m_dm = np.sum(N * self.m_l) * u.Msun
         m_sur = Rho_dm * vol
         norm = m_sur / m_dm
         self.n_l = norm * N
 
     def __post_init__(self):
-        self.calc_Mhm()
-        self.find_Nl()
-'''
-@dataclass
-class PressSchehter(MassFunction):
-    Name: str = 'Press Schechter'
-    m_l: list = field(default_factory=lambda: np.logspace(0, 2, 10))
-    n_l: list = field(default_factory=lambda: np.zeros((10)))
-    delta: float = 1
-    D: float = 1
-    sig: list = field(default_factory=lambda: [1 for i in range(len(m_l))])
-    der: list = field(default_factory=lambda: [1 for i in range(len(m_l))])
-
-    def calc_delta(self):
-        return self.delta/self.D
-
-    def calc_sig(self): ##FIXME LEFT SAME AS TINKER FOR NOW
-        func_low = 1/k * (self.A_s * (k/self.k_s)**(self.n_s-1)) * self.D**2 * np.abs(3/(k*self.R)**3 * (np.sin(k*self.R)-k*self.R*np.cos(k*self.R)))**2
-        func_high = 1/k * (self.A_s * (self.k_b/self.k_s)**(self.n_s-1) * (k/self.k_b)**(self.n_b-1)) * self.D**2 * np.abs(3/(k*self.R)**3 * (np.sin(k*self.R)-k*self.R*np.cos(k*self.R)))**2
-        self.sig = np.sqrt(quad(func_low, 1e-3, k_b) + quad (func_high, k_b, 1000))
-        return self.sig
-
-    def der_sig(self): ##FIXME LEFT SAME AS TINKER FOR NOW, needs M/sig * dSig/dM
-        func_low = 1 / k * (self.A_s * (k / self.k_s) ** (self.n_s - 1)) * self.D ** 2 * (3 / (k * self.R) ** 3 * (np.sin(k * self.R) - k * self.R * np.cos(k * self.R))) ** 2 * (3/(k*self.R)** 3) * ((-3/self.R)*np.sin(k*self.R) + 3*k*np.cos(k*self.R) + k**2 * self.R * np.cos(k*self.R))
-        func_high = 1 / k * (self.A_s * (self.k_b / self.k_s) ** (self.n_s - 1) * (k / self.k_b) ** (self.n_b - 1)) * self.D ** 2 * (3 / (k * self.R) ** 3 * (np.sin(k * self.R) - k * self.R * np.cos(k * self.R))) ** 2 * (3/(k*self.R)** 3) * ((-3/self.R)*np.sin(k*self.R) + 3*k*np.cos(k*self.R) + k**2 * self.R * np.cos(k*self.R))
-        self.der = np.sqrt(quad(func_low, 1e-3, k_b) + quad(func_high, k_b, 1000))
-        return self.der
-
-    def find_Nl(self):
-        for i in range(len(self.n_l)):
-            self.n_l[i] = np.ceil(np.sqrt(2/np.pi) * (Rho_mean/self.m_l[i]) * self.delta/self.sig[i] * np.exp(-(self.delta**2/(self.sig[i])**2)) * np.abs(self.der[i]))
-
-        ## Calculating the normalization to fit Total DM Density
-        sum = np.sum(self.m_l * self.n_l)
-        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
-        m_dm = (Rho_dm * vol).to(u.Msun)
-        A = (m_dm / sum)
-        A = A.to_value()
-        self.n_l *= A
-        return self.n_l
-
-    def __post_init__(self):
-        self.calc_delta()
+        self.radius()
         self.calc_sig()
         self.der_sig()
         self.find_Nl()
-'''
+
+@dataclass
+class PressSchechter_test(MassFunction):
+    Name: str = 'Press Schechter'
+    m_l: list = field(default_factory=lambda: np.logspace(4, 12, 10))
+    den_n_l: list = field(default_factory=lambda: np.zeros((10)))
+    n_l: list = field(default_factory=lambda: np.zeros((10)))
+    sig: list = field(default_factory=lambda: [1 for i in range(10)])
+    der: list = field(default_factory=lambda: [1 for i in range(10)])
+    R: list = field(default_factory=lambda: [1 for i in range(10)])
+    del_crit: float = 1.686
+    nparams: int = 1
+    param_names: list = field(default_factory=lambda:['del_crit'])
+    param_range: dict = field(default_factory=lambda:{'del_crit':(0.01,4)})
+
+    def getPk(self,k): #Analytic fit from statsmodel to CLASS P(k)
+        return 10**(1.5673598289074357 + np.log10(k)*-2.190072492256715 +np.log10(k)**2 *-0.46130280750744995)
+
+    def radius(self):
+        self.R = (3*self.m_l * u.M_sun/ (4 * np.pi * (Rho_mean.to(u.M_sun/u.pc**3)))) ** (1 / 3)
+        return self.R
+
+    def func(self,k, i):
+        f_1 = k**2/(2*np.pi**2) #1/k  #In units of u.Mpc
+        f_2 = 3 / ((k * (1 / u.Mpc) * self.R[i]).to('') ** 3)#* self.D2[k] ** 2
+        f_3 = np.sin((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad) - (k * (1 / u.Mpc) * self.R[i]).to('') * np.cos(
+            (k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
+        f = (np.abs(f_2 * f_3) ** 2 * f_1*self.getPk(k)).to('')
+        return f
+
+    def calc_sig(self):
+        k = np.logspace(-3, 5, 10)
+        int_val = []
+        for i in range(len(self.R)):
+            integrand = self.func(k, i)
+            integr = scipy.integrate.trapezoid(integrand, k)
+            int_val.append(integr)
+        for i in range(len(self.sig)):
+            self.sig[i] = np.sqrt(int_val[i])
+        return self.sig
+
+    def func_der(self,k,i): #W(kR)*dW/dR* 1/2pi**2
+        f_1 = k**2/(2*np.pi**2) * u.Mpc # multiplying w/ Mpc to get units to cancel but they match analytically!
+        f_2 =  3 / ((k * (1 / u.Mpc) * self.R[i]).to('') ** 3)#
+        f_3 = np.sin((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad) - (k * (1 / u.Mpc) * self.R[i]).to('') * np.cos(
+            (k * (1 / u.Mpc) * self.R[i]).to('') * u.rad) ##Window function
+        f_4 = (-3 / self.R[i].value) * 1/u.Mpc *(u.Mpc / u.pc).to('') * np.sin((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
+        f_5 = 3 * (k * (1 / u.Mpc)) * np.cos((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
+        f_6 = 1/u.Mpc * (k ** 2 * (1 / u.Mpc) * self.R[i]).to('') * np.sin((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
+        f = ((f_2 * np.abs(f_3)) * f_1 * f_2 * (f_4 + f_5 + f_6) * self.getPk(k)).to('')
+        return f #* self.phi(k)
+
+    def der_sig(self): #Gives 2sig *dsig/dR
+        k = np.logspace(-3, 5, 10)
+        int_val = []
+        for i in range(len(self.R)):
+            integrand = self.func_der(k, i)
+            integr = scipy.integrate.trapezoid(integrand, k)
+            int_val.append(integr.value)
+        #integr = scipy.integrate.cumulative_trapezoid(integrand, k, initial=integr[0])
+        #der_val = np.diff(integr, prepend=integr[0])
+        self.der = int_val
+        return self.der #units of 1/u.Mpc
+
+    def find_Nl(self): #incorporating dR/dM in dlnsig/dM to get dn/dM
+        for i in range(len(self.n_l)): ##n_l units of 1/Mpc**3
+            self.den_n_l[i] = np.abs((4 / 3 * np.pi * (Rho_mean.to(u.M_sun/u.Mpc**3).value)) ** (-1 / 3) * 1/3 * (self.m_l[i]) ** (-2 / 3)* \
+                              self.m_l[i]/(2*(self.sig[i]**2)) * self.der[i]) * \
+                              np.sqrt(2/np.pi) * (Rho_mean.to(u.M_sun/u.Mpc**3).value)/self.m_l[i]*\
+                              self.del_crit/self.sig[i]*np.exp(-self.del_crit**2/(2*self.sig[i]**2))
+
+        #Calculating the normalization
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
+        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
+        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l, initial=integr[0])
+        N = np.diff(integr,prepend=integr[0])
+        N *= (u.Mpc) ** -3
+        N = (N * vol).to('')
+        m_dm = np.sum(N * self.m_l) * u.Msun
+        m_sur = Rho_dm * vol
+        norm = m_sur / m_dm
+        self.n_l = norm * N
+
+    def __post_init__(self):
+        self.radius()
+        self.calc_sig()
+        self.der_sig()
+        self.find_Nl()
