@@ -78,6 +78,7 @@ class Gaussian(MassProfile):
         m0 = self.kwargs['Ml']
         r0 = self.kwargs['R0']
         denom = 2.*np.sqrt(2)*np.pi**(1.5)*r0**3
+        #print(np.shape(m0),np.shape(b),np.shape(r0))
         m = m0 * (1 - np.exp(-b ** 2 / (2 * r0 ** 2)))
         return m.to(u.Msun)
 

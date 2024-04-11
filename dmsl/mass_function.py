@@ -9,6 +9,7 @@ import dmsl.galaxy_subhalo_dist as gsh
 from dataclasses import dataclass,field
 import dmsl.survey as surv
 from scipy.integrate import quad_vec
+from collections import Counter
 from classy import Class
 import scipy
 
@@ -79,18 +80,18 @@ class PowerLaw(MassFunction):
 @dataclass
 class Tinker(MassFunction):
     Name: str = 'Tinker'
-    m_l: list = field(default_factory=lambda: np.logspace(4, 12, 20))
-    den_n_l: list = field(default_factory=lambda: np.zeros((20)))
-    n_l: list = field(default_factory=lambda: np.zeros((20)))
+    m_l: list = field(default_factory=lambda: np.logspace(4, 12, 100))
+    den_n_l: list = field(default_factory=lambda: np.zeros((100)))
+    n_l: list = field(default_factory=lambda: np.zeros((100)))
     nparams: int = 7
     A: float = 0.186  #FIXME Used values from colossus (https://bitbucket.org/bdiemer/colossus/src/master/colossus/lss/mass_function.py)
     a: float = 1.47
     b: float = 2.57
     c: float = 1.19
-    sig: list = field(default_factory=lambda: [1 for i in range(20)])
-    der: list = field(default_factory=lambda: [1 for i in range(20)])
-    R: list = field(default_factory=lambda: [1 for i in range(20)])
-    f: list = field(default_factory=lambda: [1 for i in range(20)])
+    sig: list = field(default_factory=lambda: [1 for i in range(100)])
+    der: list = field(default_factory=lambda: [1 for i in range(100)])
+    R: list = field(default_factory=lambda: [1 for i in range(100)])
+    f: list = field(default_factory=lambda: [1 for i in range(100)])
     A_s: float = 2.105 * 10 ** -9
     n_s: float = 0.9665
     k_b: float = 13 * (1 / u.Mpc)  # Units of Mpc^-1
@@ -173,14 +174,28 @@ class Tinker(MassFunction):
         #Calculating the normalization
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
-        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l, initial=integr[0])
-        N = np.diff(integr,prepend=integr[0])
-        N *= (u.Mpc) ** -3
-        N = (N * vol).to('')
+        integr = np.insert(integr, 0, 0)
+        N = np.diff(integr, prepend=0)
         m_dm = np.sum(N * self.m_l) * u.Msun
         m_sur = Rho_dm * vol
         norm = m_sur / m_dm
-        self.n_l = norm * N
+        N = norm * N
+
+        nlens = sum(N)
+        ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
+        c = Counter(ran_samp)
+        nl = [c[m_l] for m_l in self.m_l]
+        self.n_l = np.random.poisson(nl)
+        if sum(self.n_l) == 0:
+            self.n_l[0] = 1
+        # integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l, initial=integr[0])
+        # N = np.diff(integr,prepend=integr[0])
+        # N *= (u.Mpc) ** -3
+        # N = (N * vol).to('')
+        # m_dm = np.sum(N * self.m_l) * u.Msun
+        # m_sur = Rho_dm * vol
+        # norm = m_sur / m_dm
+        # self.n_l = norm * N
 
     def __post_init__(self):
         self.radius()
@@ -194,9 +209,60 @@ class Tinker(MassFunction):
 @dataclass
 class CDM(MassFunction):
     Name: str = 'CDM'
-    m_l: list = field(default_factory=lambda: np.logspace(0, 2, 100))
-    den_n_l: list = field(default_factory=lambda: np.zeros((100)))
-    n_l: list = field(default_factory=lambda: np.zeros((100)))
+    m_l: list = field(default_factory=lambda: np.logspace(0, 2, 10))
+    den_n_l: list = field(default_factory=lambda: np.zeros((10)))
+    n_l: list = field(default_factory=lambda: np.zeros((10)))
+    loga: float = np.log10(3.26*10**-5)
+    b: float = -1.9
+    logc: float =np.log10(2.57*10**7)
+    nparams: int = 3
+    param_names: list = field(default_factory=lambda:['loga', 'b', 'logc'])
+    param_range: dict = field(default_factory=lambda: {'loga':(-8, 3), 'b': (-4, -1), 'logc':(3, 9)})
+
+    def find_Nl(self):
+        self.den_n_l = (10**self.loga) * ((self.m_l/(10**self.logc))** self.b) ##Units of M_sun^-1
+        ##FIXME Higher by a factor of 10 than in the Shutz paper
+
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #*12 *8 *10
+        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l,self.m_l)
+        nlens=sum(np.diff(integr))
+        #print(nlens)
+        # Random sampling from m_l, n_lens times with probablity dn/dm
+        ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
+        print('ran_samp',np.shape(ran_samp))
+        c = Counter(ran_samp)
+        nl = [c[m_l] for m_l in self.m_l]
+        print('nl=',nl)
+        #Counting number of lenses per mass bin
+        # hist, _ = np.histogram(ran_samp, bins=self.m_l)
+        # hist = np.append(hist,0)
+        # nl=np.diff(integr,prepend=integr[0])
+        # nl.append(0)
+        m_dm = np.sum(nl * self.m_l) * u.Msun
+        m_sur = Rho_dm * vol
+        if m_dm != 0:
+            norm = m_sur / m_dm
+            l = nl * norm
+            print('l',l)
+        else:
+            self.n_l[0] = 1
+            return 0
+
+        #Poisson sampling to get final number of lenses per mass bin
+        self.n_l = np.random.poisson(l)
+        if sum(self.n_l)==0:
+            self.n_l[0] = 1
+        print('final nl=',self.n_l)
+
+    def __post_init__(self):
+        self.find_Nl()
+
+@dataclass
+class CDM_Old(MassFunction):
+    Name: str = 'CDM'
+    m_l: list = field(default_factory=lambda: np.logspace(0, 2, 10))
+    den_n_l: list = field(default_factory=lambda: np.zeros((10)))
+    n_l: list = field(default_factory=lambda: np.zeros((10)))
     loga: float = np.log10(3.26*10**-5)
     b: float = -1.9
     logc: float =np.log10(2.57*10**7)
@@ -208,18 +274,77 @@ class CDM(MassFunction):
         self.den_n_l = (10**self.loga) * ((self.m_l/(10**self.logc))** self.b) ##Units of M_sun^-1
         ##FIXME Higher by a factor of 10 than in the Shutz paper
 
-        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. *12 *8 *10
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l,self.m_l)
+
+        nlens = sum(np.diff(integr))
+        #ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
+
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l,self.m_l,initial = integr[0])
-        N = np.diff(integr, prepend=integr[0]) #CUMULATIVE TRAPZ ADDS PREVIOUS VAL TO EACH CURRENT VAL SO DIFF
+        N = np.diff(integr, prepend=integr[0]) #CUMULATIVE TRAPZ ADDS PREVIOUS VAL TO EACH CURRENT VAL SO NP.DIFF
+        #temp = np.random.poisson(N)
+
+        #print('temp',temp)
         m_dm = np.sum(N * self.m_l) * u.Msun
         m_sur = Rho_dm * vol
-        norm = m_sur / m_dm
-        self.n_l = norm * N
+
+        if m_dm != 0:
+            norm = m_sur / m_dm
+            l = N * norm
+        else:
+            self.n_l[0] = 1
+            return 0
+
+        #print('norm*temp',norm,norm*temp)
+        self.n_l = (l).astype(int)
+
+        if sum(self.n_l)==0:
+            self.n_l[2] = 1
+        #print('final nl=', self.n_l)
 
     def __post_init__(self):
         self.find_Nl()
 
+
+@dataclass
+class CDM_Test(MassFunction):
+    Name: str = 'CDM'
+    m_l: list = field(default_factory=lambda: np.logspace(0, 2, 10))
+    den_n_l: list = field(default_factory=lambda: np.zeros((10)))
+    n_l: list = field(default_factory=lambda: np.zeros((10)))
+    loga: float = np.log10(3.26 * 10 ** -5)
+    b: float = -1.9
+    logc: float = np.log10(2.57 * 10 ** 7)
+    nparams: int = 3
+    param_names: list = field(default_factory=lambda: ['loga', 'b', 'logc'])
+    param_range: dict = field(default_factory=lambda: {'loga': (-9, 3), 'b': (-8, -0.1), 'logc': (0.01, 12)})
+
+    def find_Nl(self):
+        self.den_n_l = (10 ** self.loga) * ((self.m_l / (10 ** self.logc)) ** self.b)  ##Units of M_sun^-1
+        ##FIXME Higher by a factor of 10 than in the Shutz paper
+
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
+        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
+        integr = np.insert(integr,0,0)
+        N = np.diff(integr, prepend=0)
+        m_dm = np.sum(N * self.m_l) * u.Msun
+        m_sur = Rho_dm * vol
+        norm = m_sur/m_dm
+        N = norm*N
+        nlens= sum(N)
+        #print('nlens',nlens)
+        ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
+        c = Counter(ran_samp)
+        nl = [c[m_l] for m_l in self.m_l]
+        #print('nl=', nl)
+
+        self.n_l = np.random.poisson(nl)
+        if sum(self.n_l) == 0:
+            self.n_l[0] = 1
+       # print('final nl=', self.n_l)
+
+    def __post_init__(self):
+        self.find_Nl()
 
 @dataclass
 class WDM_stream(MassFunction):
@@ -247,7 +372,7 @@ class WDM_stream(MassFunction):
         self.M_hm = self.a * (self.m_wdm)** self.b * (self.omega_wdm/0.25)**self.c #* (h/0.7)**2.66
 
     def find_Nl(self):
-        cdm = CDM(m_l=self.m_l)#, loga=self.loga_cdm, b=self.b_cdm, logc=self.logc_cdm) #return dN/dM, we need dN/dlnM
+        cdm = CDM_Old(m_l=self.m_l)#, loga=self.loga_cdm, b=self.b_cdm, logc=self.logc_cdm) #return dN/dM, we need dN/dlnM
         cdm_den_nl = cdm.den_n_l * cdm.m_l
         self.den_n_l = (1 + self.gamma*self.M_hm/self.m_l)**(-1*self.beta) * cdm_den_nl
         #Convert from dN/dlnM to dN/dM--
@@ -255,12 +380,26 @@ class WDM_stream(MassFunction):
 
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
-        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l, initial=integr[0])
-        N = np.diff(integr, prepend=integr[0])
+        integr = np.insert(integr, 0, 0)
+        N = np.diff(integr, prepend=0)
         m_dm = np.sum(N * self.m_l) * u.Msun
         m_sur = Rho_dm * vol
         norm = m_sur / m_dm
-        self.n_l = norm * N
+        N = norm * N
+
+        nlens = sum(N)
+        ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
+        c = Counter(ran_samp)
+        nl = [c[m_l] for m_l in self.m_l]
+        self.n_l = np.random.poisson(nl)
+        if sum(self.n_l) == 0:
+            self.n_l[0] = 1
+        # integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l, initial=integr[0])
+        # N = np.diff(integr, prepend=integr[0])
+        # m_dm = np.sum(N * self.m_l) * u.Msun
+        # m_sur = Rho_dm * vol
+        # norm = m_sur / m_dm
+        # self.n_l = norm * N
 
     def __post_init__(self):
         self.calc_Mhm()
@@ -296,18 +435,67 @@ class WDM_lensing(MassFunction):
 
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
-        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l, initial=integr[0])
-        N = np.diff(integr, prepend=integr[0])
+        integr = np.insert(integr, 0, 0)
+        N = np.diff(integr, prepend=0)
         m_dm = np.sum(N * self.m_l) * u.Msun
         m_sur = Rho_dm * vol
         norm = m_sur / m_dm
-        print(norm, m_dm)
-        self.n_l = norm * N
+        N = norm * N
+
+        nlens = sum(N)
+        ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
+        c = Counter(ran_samp)
+        nl = [c[m_l] for m_l in self.m_l]
+        self.n_l = np.random.poisson(nl)
+        if sum(self.n_l) == 0:
+            self.n_l[0] = 1
 
     def __post_init__(self):
         self.calc_Mhm()
         self.find_Nl()
 
+@dataclass
+class PBH(MassFunction): ##Check on normalization
+    Name: str = 'PBH' ## DeRocco 2023 paper eq 6 + 7
+    m_l: list = field(default_factory=lambda: np.logspace(-8, -3, 10))
+    den_n_l: list = field(default_factory=lambda: np.zeros((10)))
+    n_l: list = field(default_factory=lambda: np.zeros((10)))
+    sig: float = 1.0
+    logf_pbh: float = -2
+    m_c: float = 1.0
+    nparams: int = 1
+    param_names: list = field(default_factory=lambda: ['logf_pbh'])
+    param_range: dict = field(default_factory=lambda: {'logf_pbh': (-7, 0)})
+
+    def calc(self):
+        self.m_c = np.mean(np.log10(self.m_l)) #FIXME see if you need np.log
+        self.sig = np.std(np.log10(self.m_l))
+        #print(self.m_c,self.sig)
+    def find_Nl(self):
+        self.den_n_l = 10**self.logf_pbh/(np.sqrt(2*np.pi) * 10**self.sig *self.m_l)*\
+                       np.exp(-np.log(self.m_l/10**self.m_c)**2/(2*10**self.sig))  ##Units of M_sun^-1
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
+        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
+        integr = np.insert(integr,0,0)
+        N = np.diff(integr, prepend=0)
+        m_dm = np.sum(N * self.m_l) * u.Msun
+        m_sur = Rho_dm * vol
+        norm = m_sur/m_dm *10**-3
+        #print(norm, m_dm,m_sur, N)
+        N = norm*N
+
+        nlens= sum(N)
+        ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
+        c = Counter(ran_samp)
+        nl = [c[m_l] for m_l in self.m_l]
+        self.n_l = np.random.poisson(nl)
+        if sum(self.n_l) == 0:
+            self.n_l[0] = 1
+        #print(self.n_l)
+
+    def __post_init__(self):
+        self.calc()
+        self.find_Nl()
 
 @dataclass
 class PressSchechter(MassFunction):
@@ -372,14 +560,20 @@ class PressSchechter(MassFunction):
         #Calculating the normalization
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
-        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l, initial=integr[0])
-        N = np.diff(integr,prepend=integr[0])
-        N *= (u.Mpc) ** -3
-        N = (N * vol).to('')
+        integr = np.insert(integr, 0, 0)
+        N = np.diff(integr, prepend=0)
         m_dm = np.sum(N * self.m_l) * u.Msun
         m_sur = Rho_dm * vol
         norm = m_sur / m_dm
-        self.n_l = norm * N
+        N = norm * N
+
+        nlens = sum(N)
+        ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
+        c = Counter(ran_samp)
+        nl = [c[m_l] for m_l in self.m_l]
+        self.n_l = np.random.poisson(nl)
+        if sum(self.n_l) == 0:
+            self.n_l[0] = 1
 
     def __post_init__(self):
         self.radius()
@@ -390,12 +584,12 @@ class PressSchechter(MassFunction):
 @dataclass
 class PressSchechter_test(MassFunction):
     Name: str = 'Press Schechter'
-    m_l: list = field(default_factory=lambda: np.logspace(4, 12, 10))
-    den_n_l: list = field(default_factory=lambda: np.zeros((10)))
-    n_l: list = field(default_factory=lambda: np.zeros((10)))
-    sig: list = field(default_factory=lambda: [1 for i in range(10)])
-    der: list = field(default_factory=lambda: [1 for i in range(10)])
-    R: list = field(default_factory=lambda: [1 for i in range(10)])
+    m_l: list = field(default_factory=lambda: np.logspace(4, 12, 100))
+    den_n_l: list = field(default_factory=lambda: np.zeros((100)))
+    n_l: list = field(default_factory=lambda: np.zeros((100)))
+    sig: list = field(default_factory=lambda: [1 for i in range(100)])
+    der: list = field(default_factory=lambda: [1 for i in range(100)])
+    R: list = field(default_factory=lambda: [1 for i in range(100)])
     del_crit: float = 1.686
     nparams: int = 1
     param_names: list = field(default_factory=lambda:['del_crit'])
@@ -417,7 +611,7 @@ class PressSchechter_test(MassFunction):
         return f
 
     def calc_sig(self):
-        k = np.logspace(-3, 5, 10)
+        k = np.logspace(-3, 5, 100)
         int_val = []
         for i in range(len(self.R)):
             integrand = self.func(k, i)
@@ -439,7 +633,7 @@ class PressSchechter_test(MassFunction):
         return f #* self.phi(k)
 
     def der_sig(self): #Gives 2sig *dsig/dR
-        k = np.logspace(-3, 5, 10)
+        k = np.logspace(-3, 5, 100)
         int_val = []
         for i in range(len(self.R)):
             integrand = self.func_der(k, i)
@@ -460,14 +654,20 @@ class PressSchechter_test(MassFunction):
         #Calculating the normalization
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
-        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l, initial=integr[0])
-        N = np.diff(integr,prepend=integr[0])
-        N *= (u.Mpc) ** -3
-        N = (N * vol).to('')
+        integr = np.insert(integr, 0, 0)
+        N = np.diff(integr, prepend=0)
         m_dm = np.sum(N * self.m_l) * u.Msun
         m_sur = Rho_dm * vol
         norm = m_sur / m_dm
-        self.n_l = norm * N
+        N = norm * N
+
+        nlens = sum(N)
+        ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
+        c = Counter(ran_samp)
+        nl = [c[m_l] for m_l in self.m_l]
+        self.n_l = np.random.poisson(nl)
+        if sum(self.n_l) == 0:
+            self.n_l[0] = 1
 
     def __post_init__(self):
         self.radius()

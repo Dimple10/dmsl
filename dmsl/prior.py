@@ -19,6 +19,10 @@ def gs(s, a1, a2):
 
 def pdf(b,a1,a2,n):
     G = cumtrapz(gs(b**2, a1,a2),x=b**2, initial=0)
+    #print('G=',G)
+    #print('1-G',(1-G))
     Q = 1-(1-G)**n
+    #print('Q=',Q)
     tot = np.gradient(Q, b**2)
+    #print('tot=',tot)
     return 2*b*tot

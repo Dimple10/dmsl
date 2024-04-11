@@ -120,7 +120,7 @@ def plot_emcee(flatchain, nstars, nsamples,ndims, massprofile, surveyname,
     paper_plot()
     #fig = corner.corner(flatchain, labels=['$\\log_{{10}} {c200}$', '$M_{wdm}$','$\\gamma$','$\\beta$'],
                                             #'$\\log_{{10}} {a_{cdm}}$','$b_{cdm}$','$\\log_{{10}} {c_{cdm}}$'],#['$\\log_{{10}} {a}$','$b$','$\\log_{{10}} {c}$'],
-    fig = corner.corner(flatchain, labels=['$\\log_{{10}} {c200}$','$\\log_{{10}} {a}$','$b$','$\\log_{{10}} {c}$'],
+    fig = corner.corner(flatchain, labels=['$\\log_{{10}} {f_{pbh}}$'],#'$\\log_{{10}} {c200}$','$\\log_{{10}} {a}$','$b$','$\\log_{{10}} {c}$'],
                         # TODO match names to mass function params, mass_function.py
                         quantiles=[0.025, 0.975], fill_contours=True,show_titles=True,
                         contourf_kwargs={'colors': None, 'cmap': 'Blues'}, title_kwargs={"fontsize": 16},

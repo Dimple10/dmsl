@@ -89,27 +89,20 @@ def alphal_vec(Ml, bvec, vvec, vdotvec = None):
     Cterm = -1. * (bdotv)**2 * bunit
 
     ## Put it all together, make each term unitless
+    # print(type(Ml),np.size(Ml))
     if np.size(Ml) > 1:
+        # print('here', type(Ml[0]))
         Term1, Term2, Term3 = 0,0,0
         for m in Ml:
             Term1 += m.M(b)[:, np.newaxis] * Aterm #FIXME Loop over all Ml (add them all?)
             Term2 += (m.Mprime(b) * b)[:, np.newaxis] * Bterm
             Term3 += (m.Mpprime(b) * b**2)[:, np.newaxis] * Cterm
     else:
+        #print('here', type(Ml),np.size(Ml), np.size(b))
         Term1 = Ml.M(b)[:, np.newaxis] * Aterm
         Term2 = (Ml.Mprime(b) * b)[:, np.newaxis] * Bterm
         Term3 = (Ml.Mpprime(b) * b ** 2)[:, np.newaxis] * Cterm
         #print('Mlprime shape=',np.shape(Ml.Mpprime(b)*b**2[:]))
 
     alphal_vec = Term1 + Term2 + Term3
-    # print('Term2 size, term3 size', np.size(Term2), np.size(Term3)) #1000, 1000
-    # if np.any(np.isnan(Term1+Term2)):
-    #     print('Term 1+2 has nan')
-    # if np.any(np.isnan(Term2 + Term3)): #THIS HAS NAN!!!
-    #     for i in range(len(Term2)):
-    #         if(np.any(np.isnan(Term2[i]+Term3[i]))):
-    #             print('nan sum:', Term2[i], Term3[i], i)
-    #             print('Term2 and Term3', Term2, Term3)
-    # if np.any(np.isnan(Term1 + Term3)):
-    #     print('Term 1+3 has nan')
     return alphal_vec
