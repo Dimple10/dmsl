@@ -14,6 +14,7 @@ make_file_path
 import numpy as np
 import pymc as pm
 import exoplanet_core as xo
+import datetime
 
 # flatten lists
 flatten = lambda l: [item for sublist in l for item in sublist]
@@ -30,6 +31,7 @@ psum = lambda _: print(np.sum(_))
 ## make file path names
 def make_file_path(directory, array_kwargs, extra_string=None, ext='.dat'):
         s = '_'
+        ts = datetime.datetime.now().strftime("_%Y:%m:%d-%H.%M.%S")
         string_kwargs = [str(int(i)) for i in array_kwargs]
         string_kwargs = np.array(string_kwargs, dtype='U45')
         if (extra_string !=None) and (len(extra_string)>50):
@@ -38,5 +40,5 @@ def make_file_path(directory, array_kwargs, extra_string=None, ext='.dat'):
         if extra_string !=None:
             string_kwargs = np.insert(string_kwargs, 0, extra_string)
         kwpath = s.join(string_kwargs)
-        return directory+kwpath+ext
+        return directory+kwpath+ts+ext
 

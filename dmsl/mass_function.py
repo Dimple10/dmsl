@@ -366,7 +366,7 @@ class WDM_stream(MassFunction):
     d :float = 2.66
     nparams: int = 3 #m_wdm, gamma, beta
     param_names: list = field(default_factory=lambda:['m_wdm', 'gamma', 'beta'])#, 'loga_cdm','b_cdm','logc_cdm'])
-    param_range: dict = field(default_factory=lambda:{'m_wdm': (0.01,200),'gamma': (0.01, 50), 'beta':(0,3)})#,
+    param_range: dict = field(default_factory=lambda:{'m_wdm': (0.01,1000),'gamma': (0.01, 50), 'beta':(0,3)})#,
                                                      # 'loga_cdm':(-8, 2), 'b_cdm': (-4, -0.01), 'logc_cdm':(4, 10)})
     def calc_Mhm(self):
         self.M_hm = self.a * (self.m_wdm)** self.b * (self.omega_wdm/0.25)**self.c #* (h/0.7)**2.66
@@ -407,7 +407,7 @@ class WDM_stream(MassFunction):
 
 @dataclass
 class WDM_lensing(MassFunction):
-    Name: str = 'Warm Dark Matter Lensing'
+    Name: str = 'WDM'
     m_l: list = field(default_factory=lambda: np.logspace(0, 2, 100))
     n_l: list = field(default_factory=lambda: np.zeros((100)))
     den_n_l: list = field(default_factory=lambda: np.zeros((100)))
@@ -457,7 +457,8 @@ class WDM_lensing(MassFunction):
 @dataclass
 class PBH(MassFunction): ##Check on normalization
     Name: str = 'PBH' ## DeRocco 2023 paper eq 6 + 7
-    m_l: list = field(default_factory=lambda: np.logspace(-8, -3, 10))
+    #m_l: list = field(default_factory=lambda: np.logspace(-8, -3, 10))
+    m_l: list = field(default_factory=lambda: np.ones(1))
     den_n_l: list = field(default_factory=lambda: np.zeros((10)))
     n_l: list = field(default_factory=lambda: np.zeros((10)))
     sig: float = 1.0
@@ -468,22 +469,22 @@ class PBH(MassFunction): ##Check on normalization
     param_range: dict = field(default_factory=lambda: {'logf_pbh': (-7, 0)})
 
     def calc(self):
-        self.m_c = np.mean(np.log10(self.m_l)) #FIXME see if you need np.log
-        self.sig = np.std(np.log10(self.m_l))
-        #print(self.m_c,self.sig)
+        self.m_c = np.log10(self.m_l[0])#np.mean(np.log10(self.m_l)) #FIXME see if you need np.log
+        self.sig = np.log10(self.m_l[0]*0.1)#np.std(np.log10(self.m_l))
+        print(self.m_c,self.sig)
     def find_Nl(self):
-        self.den_n_l = 10**self.logf_pbh/(np.sqrt(2*np.pi) * 10**self.sig *self.m_l)*\
+        self.den_n_l = 10**self.logf_pbh/(np.sqrt(2*np.pi) * 10**self.sig *self.m_l[0])*\
                        np.exp(-np.log(self.m_l/10**self.m_c)**2/(2*10**self.sig))  ##Units of M_sun^-1
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
-        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
-        integr = np.insert(integr,0,0)
-        N = np.diff(integr, prepend=0)
-        m_dm = np.sum(N * self.m_l) * u.Msun
+        #integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
+        #integr = np.insert(integr,0,0)
+        #N = np.diff(integr, prepend=0)
+        N=self.den_n_l
+        m_dm = np.sum(N* self.m_l) * u.Msun
         m_sur = Rho_dm * vol
-        norm = m_sur/m_dm *10**-3
-        #print(norm, m_dm,m_sur, N)
-        N = norm*N
-
+        norm = m_sur/m_dm
+        N = norm*N*10**-3
+        print(m_dm, N)
         nlens= sum(N)
         ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
         c = Counter(ran_samp)
@@ -491,7 +492,8 @@ class PBH(MassFunction): ##Check on normalization
         self.n_l = np.random.poisson(nl)
         if sum(self.n_l) == 0:
             self.n_l[0] = 1
-        #print(self.n_l)
+
+        print(self.n_l)
 
     def __post_init__(self):
         self.calc()

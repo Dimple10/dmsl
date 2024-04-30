@@ -166,10 +166,10 @@ class Sampler():
         # print("thin: {0}".format(thin))
 
         samples = sampler.get_chain(discard=self.ntune, flat=True)
-        print(f"95\% upper limit on f_pbh: {np.percentile(samples[:, 0], 95)}")
-        # print(f"95\% upper limit on loga: {np.percentile(samples[:,1], 95)}")
-        # print(f"95\% upper limit on b: {np.percentile(samples[:, 2], 95)}")
-        # print(f"95\% upper limit on logc: {np.percentile(samples[:, 3], 95)}")
+        print(f"95\% upper limit on fpbh: {np.percentile(samples[:, 0], 95)}")
+        #print(f"95\% upper limit on m wdm: {np.percentile(samples[:,1], 95)}")
+        #print(f"95\% upper limit on gamma: {np.percentile(samples[:, 2], 95)}")
+        #print(f"95\% upper limit on beta: {np.percentile(samples[:, 3], 95)}")
         # print(f"95\% upper limit on loga_cdm: {np.percentile(samples[:, 4], 95)}")
         # print(f"95\% upper limit on b_cdm: {np.percentile(samples[:, 5], 95)}")
         # print(f"95\% upper limit on logc_cdm: {np.percentile(samples[:, 6], 95)}")
@@ -278,6 +278,7 @@ class Sampler():
 
     def samplealphal(self, pars):
         ## Samples p(alpha_l | M_l)
+        #print('In samplealpha')
         if self.usefraction:
             f = pars[-1]
         else:
@@ -328,7 +329,9 @@ class Sampler():
         bvec *= u.kpc
         vvec *= u.km / u.s
         ## get alphal given sampled other params.
+
         alphal = lm.alphal(newmassprofile, bvec, vvec)
+        #print('Outside lensing model')
         ## if only sampling in 1D, get magnitude of vec.
         if self.ndims == 1:
             alphal = np.linalg.norm(alphal, axis=1)
@@ -365,6 +368,7 @@ class Sampler():
         if np.any(np.isnan(alphal)): #FIXME Should not be needed!
             return -np.inf
         try:
+            #print('Trying')
             diff = alphal.value - self.data
         except:
             return -np.inf
@@ -386,8 +390,12 @@ class Sampler():
 
     def load_data(self):
         print('Creating data vector')
-        self.data = AccelData(self.survey, nstars=self.nstars,
-                ndims=self.ndims).data.to_numpy()
+        if self.massfunction.Name == 'WDM Stream':
+            self.data = AccelData(self.survey, nstars=self.nstars,
+                ndims=self.ndims,wdm=True).data.to_numpy()
+        else:
+            self.data = AccelData(self.survey, nstars=self.nstars,
+                                  ndims=self.ndims).data.to_numpy()
 
     def load_prior(self):
         print('Loading prior')
@@ -434,7 +442,7 @@ class Sampler():
             ext='.png')
         plot.plot_logprob(self.sampler.get_log_prob(), outpath)
 
-    def prune_chains(self, maxlengthfrac=0.1):
+    def prune_chains(self, maxlengthfrac=0.05):
         chains = []
         loglikes = []
         for i in range(self.nchains):
@@ -451,6 +459,7 @@ class Sampler():
         return flatchain, loglike
 
     def make_new_mass(self,pars): #FIXME For mf does this need to be mf + mp? or just mf?
+        #print('In make new mass')
         mptype = self.massprofile.type
         kwargs = self.massprofile.kwargs
         i = 1
