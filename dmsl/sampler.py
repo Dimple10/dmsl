@@ -1,6 +1,7 @@
 '''
 MCMC sampler
 '''
+import time
 
 import emcee
 import dill
@@ -32,7 +33,8 @@ from dmsl.prior import *
 import dmsl.lensing_model as lm
 import dmsl.mass_profile as mp
 import dmsl.mass_function as mf
-
+from multiprocessing import Pool
+from time import *
 RHO_DM = gsh.density(8.*u.kpc)
 
 
@@ -139,6 +141,7 @@ class Sampler():
         # Now we'll sample for up to max_n steps
         print("Sampling..")
         ctr = 0
+        start = time()
         for sample in sampler.sample(p0, iterations=max_n, progress=True):
             # Only check convergence every 100 steps
             if sampler.iteration % 100:
@@ -158,7 +161,18 @@ class Sampler():
                 print('Converged at..', sampler.iteration)
                 ctr+=1
             old_tau = tau
+        end = time()
+        serial_time = end-start
+        print("Serial took {0:.1f} seconds".format(serial_time))
 
+        with Pool() as pool:
+            sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike, pool=pool)
+            start = time()
+            sampler.run_mcmc(p0, max_n, progress=True)
+            end = time()
+            multi_time = end - start
+            print("Multiprocessing took {0:.1f} seconds".format(multi_time))
+            print("{0:.1f} times faster than serial".format(serial_time / multi_time))
         ## run sampler
         #print("Sampling..")
         #sampler.run_mcmc(p0, self.ntune+self.nsamples, progress=True)
