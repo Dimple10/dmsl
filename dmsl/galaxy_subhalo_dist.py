@@ -20,7 +20,7 @@ def density(r):
 
 def initialize_dist(target='GC', rmax=1.0):
     if target == 'GC':
-        rarray = np.linspace(0.,1, 1000)*u.kpc
+        rarray = np.linspace(0.001,1, 1000)*u.kpc
         mw_r = R_SUN - rarray
         rhor = density(mw_r)
         rsamples = 1. - (rhor-np.min(rhor))/(np.max(rhor)-np.min(rhor))

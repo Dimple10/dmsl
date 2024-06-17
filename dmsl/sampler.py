@@ -73,6 +73,8 @@ class Sampler():
         self.load_data()
         self.load_prior()
         #self.testing = self.make_new_mass((13,-4.49,-1.9,7.41))
+        self.chisq = []
+        self.beff_avg = []
         self.run_inference()
         if self.overwrite:
             self.make_diagnostic_plots()
@@ -293,8 +295,9 @@ class Sampler():
                            n=nlens)
         else:
             newmassprofile, newmassfunction = self.make_new_mass(pars)
-            nlens = np.ceil(f*newmassfunction.n_l[2:])
+            nlens = np.ceil(f*newmassfunction.n_l)
             if sum(nlens) ==0:
+                print('no lens in sampler 2')
                 nlens[0] = 1
             priorpdf = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
                 n=sum(nlens))
@@ -305,12 +308,15 @@ class Sampler():
         priorpdfspline = UnivariateSpline(np.log10(self.bs[priorpdf>0]),
                 np.log10(priorpdf[priorpdf>0]), ext='zeros', s=0)
         dists = self.rdist.rvs(self.nstars) * u.kpc
-        x = self.bs
+        x = np.log10(self.bs)
         y = 10**priorpdfspline(np.log10(self.bs))
         sci_s = scipy.interpolate.interp1d(x, y, fill_value='extrapolate')
         sci = sci_s(x)
-        beff = np.random.choice(x, self.nstars, p=sci / sum(sci)) * dists
-        vl = scipy.stats.truncnorm.rvs(a=0, b=550., loc=0.,scale =220, size=self.nstars)
+        temp = np.random.choice(x, self.nstars, p=sci / sum(sci)) #* dists
+        self.beff_avg.append(np.average(temp))
+        # beff = 10**(np.ones(temp.shape)*np.average(temp)) * dists
+        beff = 10 ** (temp) * dists
+        vl = scipy.stats.truncnorm.rvs(a=0, b=550./220, loc=0.,scale =220, size=self.nstars)
         bvec = np.zeros((self.nstars, 2))
         vvec = np.zeros((self.nstars, 2))
         if self.ndims==2:
@@ -360,11 +366,11 @@ class Sampler():
             return -np.inf
         alphal = self.samplealphal(pars)
         #FIXME
-        # if self.massprofile.type == 'ps':
-        #     # if ps, need to do snr check and re-sample if any have too high snr. this stops walkers from getting too stuck.
-        #      alphal = self.snr_check(alphal, pars)
-        #      if alphal == "error":
-        #          return -np.inf
+        if self.massprofile.type == 'ps':
+            # if ps, need to do snr check and re-sample if any have too high snr. this stops walkers from getting too stuck.
+             alphal = self.snr_check(alphal, pars)
+             if alphal == "error":
+                 return -np.inf
         if np.any(np.isnan(alphal)): #FIXME Should not be needed!
             return -np.inf
         try:
@@ -373,6 +379,7 @@ class Sampler():
         except:
             return -np.inf
         chisq = -0.5 * np.sum((diff)**2 / self.survey.alphasigma.value**2 -np.log(2 * np.pi * self.survey.alphasigma.value**2))
+        self.chisq.append([pars,chisq]) #specific to 1 par case
         return chisq
 
     def lnlike_noise(self,pars):
@@ -404,6 +411,7 @@ class Sampler():
         self.rdist = rv
         self.bs = np.logspace(-8, np.log10(np.sqrt(2)*self.survey.fov_rad),
                 self.nstars)
+        #print(self.bs)
         print('Prior loaded')
 
     def make_diagnostic_plots(self):
@@ -470,7 +478,7 @@ class Sampler():
             if mftype == 'PowerLaw':
                 logalpha = pars[i+0]
                 logM0 = pars[i+1]
-                newmf = mf.PowerLaw(logM_0=logM0, logalpha=logalpha)
+                newmf = mf.PowerLaw(m_l=self.massfunction.m_l,logM_0=logM0, logalpha=logalpha)
             elif mftype == 'Tinker':
                 A = pars[i+0]
                 a = pars[i+1]
@@ -479,13 +487,13 @@ class Sampler():
                 k_b = pars[i+4]
                 n_b = pars[i+5]
                 k_s = pars[i+6]
-                newmf = mf.Tinker(A= A, a= a, b= b, c= c, k_b=k_b, n_b=n_b, k_s=k_s)
+                newmf = mf.Tinker(m_l=self.massfunction.m_l,A= A, a= a, b= b, c= c, k_b=k_b, n_b=n_b, k_s=k_s)
             elif mftype == 'CDM':
                 loga = pars[i+0]
                 b = pars[i+1]
                 logc = pars[i+2]
                 #print('before CDM makenewmass')
-                newmf = mf.CDM_Test(loga = loga, b = b,logc = logc)
+                newmf = mf.CDM_Test(m_l=self.massfunction.m_l,loga = loga, b = b,logc = logc)
                 #print('after CDM makenewmass')
             elif mftype == 'WDM Stream':
                 m_wdm = pars[i+0]
@@ -494,18 +502,18 @@ class Sampler():
                 # loga_cdm = pars[i+3]
                 # b_cdm = pars[i+4]
                 # logc_cdm =pars[i+5]
-                newmf = mf.WDM_stream(m_wdm=m_wdm,gamma=gamma, beta=beta)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
+                newmf = mf.WDM_stream(m_l=self.massfunction.m_l,m_wdm=m_wdm,gamma=gamma, beta=beta)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
             elif mftype == 'Press Schechter':
                 del_crit = pars[i+0]
                 #b = pars[i+1]
                 #logc = pars[i+2]
-                newmf = mf.PressSchechter_test(del_crit = del_crit)#,b = b,logc = logc)
+                newmf = mf.PressSchechter_test(m_l=self.massfunction.m_l,del_crit = del_crit)#,b = b,logc = logc)
             elif mftype == 'PBH':
                 #print('inside pbh make new mass')
                 logf_pbh = pars[i+0]
                 #b = pars[i+1]
                 #logc = pars[i+2]
-                newmf = mf.PBH(logf_pbh = logf_pbh)
+                newmf = mf.PBH(m_l=self.massfunction.m_l,logf_pbh = logf_pbh)
             #else:
              #   raise NotImplementedError("""Need to add this mass function to
               #  sampler.""")
@@ -521,7 +529,8 @@ class Sampler():
                         kwargs['Ml'] = newmf_ml*u.Msun
                         newmp.extend([mp.PointSource(**kwargs)for _ in range(num_lenses)])
                     if len(newmp) == 0:
-                        kwargs['Ml'] = int(newmf.m_l[2]) * u.Msun
+                        print('no lens makenewmass')
+                        kwargs['Ml'] = int(newmf.m_l[0]) * u.Msun
                         newmp = mp.PointSource(**kwargs)
 
             elif mptype == 'gaussian':
@@ -551,7 +560,7 @@ class Sampler():
                         kwargs['Ml'] = newmf_ml * u.Msun
                         newmp.extend([mp.NFW(**kwargs) for _ in range(num_lenses)])
                     if len(newmp) == 0: ##Case where there are no lens, assume 1 exists in the lowest mass bin
-                        kwargs['Ml'] = int(newmf.m_l[2]) * u.Msun
+                        kwargs['Ml'] = int(newmf.m_l[0]) * u.Msun
                         newmp = mp.NFW(**kwargs)
 
             else:

@@ -20,6 +20,7 @@ import time
 import scipy.interpolate
 from scipy.interpolate import UnivariateSpline
 import astropy.units as u
+import cProfile
 
 seed = 0
 
@@ -30,7 +31,8 @@ class AccelData():
         if wdm:
             cdm = mf.CDM_Test()
             nfw = mp.NFW(Ml=1.e5*u.Msun, c200= 2.5)
-            self.cdm_alphal = self.samplealphal([np.log10(13),np.log10(3.26 * 10 ** -5),-1.9,np.log10(2.57 * 10 ** 7)],survey,nstars, nfw, cdm)
+            self.cdm_alphal = self.samplealphal([np.log10(13),np.log10(3.26 * 10 ** -5),-1.9,np.log10(2.57 * 10 ** 7)],
+                                                survey,nstars,bool=False,mptype=nfw, mftype=cdm)
             data = pd.DataFrame(self.cdm_alphal.value,columns=['a_x', 'a_y'])
             print('CDM data:',type(self.cdm_alphal), self.cdm_alphal)
                 #sampler.make_new_mass([2.5,np.log10(3.26 * 10 ** -5),-1.9,np.log10(2.57 * 10 ** 7)], 'CDM','nfw')
@@ -57,68 +59,82 @@ class AccelData():
         print(data.shape)
         make_histogram(data.to_numpy(),int(len(data)/100) + 1, r'\alpha', filepath)
 
-    def lnlike(self,pars,survey,nstars,mptype,mftype):
-        # if ~np.isfinite(self.logprior(pars)):
-        #     return -np.inf
-        alphal = self.samplealphal(pars,survey,nstars,mptype,mftype)
+    def lnlike(self,pars,survey,nstars,mptype,mftype,bb,aa):
+        #print(np.shape(bb))
+        self.alphal = self.samplealphal(pars,survey,nstars,bb,aa,mptype=mptype,mftype=mftype)
         #FIXME
         # if self.massprofile.type == 'ps':
         #     # if ps, need to do snr check and re-sample if any have too high snr. this stops walkers from getting too stuck.
         #      alphal = self.snr_check(alphal, pars)
         #      if alphal == "error":
         #          return -np.inf
-        if np.any(np.isnan(alphal)): #FIXME Should not be needed!
+        if np.any(np.isnan(self.alphal)): #FIXME Should not be needed!
+            # print('inside np.isnan lnlike')
             return -np.inf
         try:
-            #print('Trying')
-            diff = alphal.value - self.data
+            # print('Inside try, alphal.value',alphal.value)
+            # print('Inside try, data', self.data.to_numpy())
+            diff = self.alphal.value - self.data.to_numpy()
+            # print('diff', diff)
         except:
             return -np.inf
         chisq = -0.5 * np.sum((diff)**2 / survey.alphasigma.value**2 -np.log(2 * np.pi * survey.alphasigma.value**2))
         return chisq
 
-    def samplealphal(self, pars, survey, nstars, mptype=None,mftype=None):
+    def samplealphal(self, pars, survey, nstars,bb=None,aa=None,bool=True,mptype=None,mftype=None):
         rv = gsh.initialize_dist(target=survey.target,
                                  rmax=survey.maxdlens.to(u.kpc).value)
-        rdist = rv
-        bs = np.logspace(-8, np.log10(np.sqrt(2)*survey.fov_rad),nstars)
-
-        newmassprofile, newmassfunction = self.make_new_mass(pars, mptype,mftype)
+        self.rdist = rv
+        #print('stars',nstars)
+        self.bs = np.logspace(-8, np.log10(np.sqrt(2)*survey.fov_rad),nstars)
+        #print('bs min',np.min(self.bs))
+        newmassprofile, newmassfunction = self.make_new_mass(pars,mptype,mftype)
         nlens = newmassfunction.n_l
         if sum(nlens) ==0:
             nlens[0] = 1
-        priorpdf = pdf(bs, a1=survey.fov_rad, a2=survey.fov_rad,
+        priorpdf = pdf(self.bs, a1=survey.fov_rad, a2=survey.fov_rad,
             n=sum(nlens))
         #print(priorpdf, self.bs, sum(nlens))
         if np.any(np.isnan(priorpdf)):
+            #print('inside np.isnan')
             return -np.inf
 
-        priorpdfspline = UnivariateSpline(np.log10(bs[priorpdf>0]),
+        priorpdfspline = UnivariateSpline(np.log10(self.bs[priorpdf>0]),
                 np.log10(priorpdf[priorpdf>0]), ext='zeros', s=0)
-        dists = rdist.rvs(nstars) * u.kpc
-        x = bs
-        y = 10**priorpdfspline(np.log10(bs))
-        sci_s = scipy.interpolate.interp1d(x, y, fill_value='extrapolate')
-        sci = sci_s(x)
-        beff = np.random.choice(x, nstars, p=sci / sum(sci)) * dists
-        vl = scipy.stats.truncnorm.rvs(a=0, b=550., loc=0.,scale =220, size=nstars)
-        bvec = np.zeros((nstars, 2))
-        vvec = np.zeros((nstars, 2))
+        self.dists = self.rdist.rvs(nstars) * u.kpc
+        x = np.log10(self.bs)
+        self.y = 10**priorpdfspline(np.log10(self.bs))
+        self.sci_s = scipy.interpolate.interp1d(x, self.y, fill_value='extrapolate')
+        sci = self.sci_s(x)
+        #print('pdf:',sci/sum(sci))
+        temp = np.random.choice(x, nstars, p=sci / sum(sci)) #* self.dists
+        self.beff = 10**(np.ones(temp.shape)*np.average(temp)) * self.dists
+        #self.beff = 10 ** (np.random.choice(x, nstars, p=sci / sum(sci))) * self.dists
+        #print('dist min', np.min(self.dists))
+        self.vl = scipy.stats.truncnorm.rvs(a=0, b=550./220, loc=0.,scale=220, size=nstars)
+        self.bvec = np.zeros((nstars, 2))
+        self.vvec = np.zeros((nstars, 2))
         btheta = np.random.rand(nstars)* 2. * np.pi
         vtheta = np.random.rand(nstars)* 2. * np.pi
-        bvec[:, 0] = beff * np.cos(btheta)
-        bvec[:, 1] = beff * np.sin(btheta)
-        vvec[:, 0] = vl * np.cos(vtheta)
-        vvec[:, 1] = vl * np.sin(vtheta)
+        self.bvec[:, 0] = self.beff * np.cos(btheta)
+        self.bvec[:, 1] = self.beff * np.sin(btheta)
+        self.vvec[:, 0] = self.vl * np.cos(vtheta)
+        self.vvec[:, 1] = self.vl * np.sin(vtheta)
 
-        bvec *= u.kpc
-        vvec *= u.km / u.s
+        self.bvec *= u.kpc
+        self.vvec *= u.km / u.s
         ## get alphal given sampled other params.
-        start = time.perf_counter()
-        alphal = lm.alphal(newmassprofile, bvec, vvec)
-        end = time.perf_counter()
+        #start = time.perf_counter()
+        # print('bvec:',bvec)
+        # print('vvec:', vvec)
+        self.alphal = lm.alphal(newmassprofile, self.bvec, self.vvec)
+        if bool:
+            bb.append(np.linalg.norm(self.bvec, axis=1))
+            #print('beff vs bvec',np.isclose(np.linalg.norm(self.bvec, axis=1),self.beff,atol=0))
+            aa.append(self.alphal)
+        #end = time.perf_counter()
         #print(f'Time taken for lensing model: {(end-start):.6f} second')
-        return alphal
+        return self.alphal
 
     def make_new_mass(self,pars,mpt,mft): #FIXME For mf does this need to be mf + mp? or just mf?
         mptype = mpt.type
@@ -130,7 +146,7 @@ class AccelData():
         if mftype == 'PowerLaw':
             logalpha = pars[i+0]
             logM0 = pars[i+1]
-            newmf = mf.PowerLaw(logM_0=logM0, logalpha=logalpha)
+            newmf = mf.PowerLaw(m_l=mft.m_l,logM_0=logM0, logalpha=logalpha)
         elif mftype == 'Tinker':
             A = pars[i+0]
             a = pars[i+1]
@@ -139,12 +155,12 @@ class AccelData():
             k_b = pars[i+4]
             n_b = pars[i+5]
             k_s = pars[i+6]
-            newmf = mf.Tinker(A= A, a= a, b= b, c= c, k_b=k_b, n_b=n_b, k_s=k_s)
+            newmf = mf.Tinker(m_l=mft.m_l,A= A, a= a, b= b, c= c, k_b=k_b, n_b=n_b, k_s=k_s)
         elif mftype == 'CDM':
             loga = pars[i+0]
             b = pars[i+1]
             logc = pars[i+2]
-            newmf = mf.CDM_Test(loga = loga, b = b,logc = logc)
+            newmf = mf.CDM_Test(m_l=mft.m_l,loga = loga, b = b,logc = logc)
         elif mftype == 'WDM Stream':
             m_wdm = pars[i+0]
             gamma = pars[i+1]
@@ -152,13 +168,13 @@ class AccelData():
             # loga_cdm = pars[i+3]
             # b_cdm = pars[i+4]
             # logc_cdm =pars[i+5]
-            newmf = mf.WDM_stream(m_wdm=m_wdm,gamma=gamma, beta=beta)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
+            newmf = mf.WDM_stream(m_l=mft.m_l,m_wdm=m_wdm,gamma=gamma, beta=beta)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
         elif mftype == 'Press Schechter':
             del_crit = pars[i+0]
-            newmf = mf.PressSchechter_test(del_crit = del_crit)
+            newmf = mf.PressSchechter_test(m_l=mft.m_l,del_crit = del_crit)
         elif mftype == 'PBH':
             logf_pbh = pars[i+0]
-            newmf = mf.PBH(logf_pbh = logf_pbh)
+            newmf = mf.PBH(m_l=mft.m_l,logf_pbh = logf_pbh)
         else:
            raise NotImplementedError("""Need to add this mass function to
            sampler.""")
@@ -175,7 +191,8 @@ class AccelData():
                     kwargs['Ml'] = newmf_ml*u.Msun
                     newmp.extend([mp.PointSource(**kwargs)for _ in range(num_lenses)])
                 if len(newmp) == 0:
-                    kwargs['Ml'] = int(newmf.m_l[2]) * u.Msun
+                    print('no lens sampler')
+                    kwargs['Ml'] = int(newmf.m_l[0]) * u.Msun
                     newmp = mp.PointSource(**kwargs)
 
         elif mptype == 'gaussian':
@@ -189,6 +206,7 @@ class AccelData():
                     kwargs['Ml'] = newmf_ml * u.Msun
                     newmp.extend([mp.Gaussian(**kwargs) for _ in range(num_lenses)])
                 if len(newmp) == 0:
+                    print('no lens sampler')
                     kwargs['Ml'] = newmf.m_l[0] * u.Msun
                     newmp = mp.Gaussian(**kwargs)
         elif mptype == 'nfw':
@@ -200,12 +218,13 @@ class AccelData():
                 newmp = mp.NFW(**kwargs)
             else:
                 #print(newmf.n_l)
-                for ind123, (newmf_ml, num_lenses) in enumerate(zip(newmf.m_l, newmf.n_l.astype(int))):
+                for newmf_ml, num_lenses in zip(newmf.m_l, newmf.n_l.astype(int)):
                     #print(ind123)
                     kwargs['Ml'] = newmf_ml * u.Msun
                     newmp.extend([mp.NFW(**kwargs) for _ in range(num_lenses)])
                 if len(newmp) == 0: ##Case where there are no lens, assume 1 exists in the lowest mass bin
-                    kwargs['Ml'] = int(newmf.m_l[2]) * u.Msun
+                    print('no lens sampler')
+                    kwargs['Ml'] = int(newmf.m_l[0]) * u.Msun
                     newmp = mp.NFW(**kwargs)
 
         else:
