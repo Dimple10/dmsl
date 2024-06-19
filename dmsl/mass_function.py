@@ -13,6 +13,7 @@ from collections import Counter
 from classy import Class
 import scipy
 import random
+import time
 
 RHO_CRIT = cosmo.critical_density(0.)
 Rho_mean = cosmo.Om0 * RHO_CRIT
@@ -87,28 +88,29 @@ class PowerLaw(MassFunction):
 @dataclass
 class Tinker(MassFunction):
     Name: str = 'Tinker'
-    m_l: list = field(default_factory=lambda: np.logspace(4, 12, 100))
-    den_n_l: list = field(default_factory=lambda: np.zeros((100)))
-    n_l: list = field(default_factory=lambda: np.zeros((100)))
-    nparams: int = 7
-    A: float = 0.186  #FIXME Used values from colossus (https://bitbucket.org/bdiemer/colossus/src/master/colossus/lss/mass_function.py)
-    a: float = 1.47
-    b: float = 2.57
-    c: float = 1.19
-    sig: list = field(default_factory=lambda: [1 for i in range(100)])
-    der: list = field(default_factory=lambda: [1 for i in range(100)])
-    R: list = field(default_factory=lambda: [1 for i in range(100)])
-    f: list = field(default_factory=lambda: [1 for i in range(100)])
+    m_l: list = field(default_factory=lambda: np.logspace(4, 12, 10))
+    den_n_l: list = field(default_factory=lambda: np.zeros((10)))
+    n_l: list = field(default_factory=lambda: np.zeros((10)))
+    A: float = 0.260  #FIXME Used values from colossus (https://bitbucket.org/bdiemer/colossus/src/master/colossus/lss/mass_function.py)
+    a: float = 2.66 #power
+    b: float = 1.41
+    c: float = 2.44 #power
+    sig: list = field(default_factory=lambda: [1 for i in range(10)])
+    der: list = field(default_factory=lambda: [1 for i in range(10)])
+    R: list = field(default_factory=lambda: [1 for i in range(10)])
+    f: list = field(default_factory=lambda: [1 for i in range(10)])
     A_s: float = 2.105 * 10 ** -9
     n_s: float = 0.9665
     k_b: float = 13 * (1 / u.Mpc)  # Units of Mpc^-1
     n_b: float = 2.0  # or 3.0 (Fig #7 in Power of Halometry)
     k_s: float = 0.05 * (1 / u.Mpc)  # Units of Mpc^-1
     #cosmo:astropy.cosmology.Cosmology() = cosmo
-    param_names: list = field(default_factory=lambda:['A', 'a', 'b', 'c', 'k_b', 'n_b', 'k_s'])
-    param_range: dict = field(default_factory=lambda:{'A': (0, np.inf), 'a': (1, 100), 'b':(1, np.inf), 'c':(1, np.inf), 'k_b':(1,100),'n_b':(1,5), 'k_s':(0,1)})
+    nparams: int = 4
+    param_names: list = field(default_factory=lambda:['A', 'a', 'b', 'c'])#, 'k_b', 'n_b', 'k_s'])
+    param_range: dict = field(default_factory=lambda:{'A': (0.001, 5), 'a': (0.01, 10), 'b':(0.01, 10), 'c':(0.01, 10)})#, 'k_b':(1,100),'n_b':(1,5), 'k_s':(0,1)})
 
     def getPk(self):
+        #start=time.time()
         cosmol = Class()
         cosmol.set({'P_k_max_1/Mpc':100,'omega_b':cosmo.Ob0*h**2,'omega_m':cosmo.Om0*h**2,'h':cosmo.h,'A_s':2.100549e-09,
                     'n_s':0.9660499,'tau_reio':0.05430842})
@@ -117,8 +119,10 @@ class Tinker(MassFunction):
         kk = np.logspace(-3, np.log10(100), 10000)  # k in 1/Mpc
         Pk = [cosmol.pk(s,0.)*h**3 for s in kk]  # P(k) in (Mpc)**3
 
-        F = scipy.interpolate.interp1d(np.log10(kk), np.log10(Pk), fill_value='extrapolate')
-        return F
+        self.F = scipy.interpolate.interp1d(np.log10(kk), np.log10(Pk), fill_value='extrapolate')
+        #end=time.time()
+        #print(f'Cosmo call: {(end-start):.6f} seconds')
+        return self.F
 
     def phi(self,k):
         return np.piecewise(k, [k<self.k_b*u.Mpc, k>=self.k_b*u.Mpc],
@@ -135,43 +139,58 @@ class Tinker(MassFunction):
         #print("R= ", self.R)
         return self.R
 
-    def func(self,k):
+    def func(self,k,i):
         f_1 = k**2/(2*np.pi**2) #1/k  #In units of u.Mpc
-        f_2 = 3 / ((k * (1 / u.Mpc) * self.R).to('') ** 3)#* self.D2[k] ** 2
-        f_3 = np.sin((k * (1 / u.Mpc) * self.R).to('') * u.rad) - (k * (1 / u.Mpc) * self.R).to('') * np.cos(
-            (k * (1 / u.Mpc) * self.R).to('') * u.rad)
+        f_2 = 3 / ((k * (1 / u.Mpc) * self.R[i]).to('') ** 3)#* self.D2[k] ** 2
+        f_3 = np.sin((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad) - (k * (1 / u.Mpc) * self.R[i]).to('') * np.cos(
+            (k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
         f = (np.abs(f_2 * f_3) ** 2 * f_1).to('')
         return f #* self.phi(k)
 
     def calc_sig(self):
-        F = self.getPk()
-        D2 = lambda k: 10**F(np.log10(k))*k**3/(2*np.pi**2*self.phi(k))
-        integrand = lambda k: self.func(k)* 10**F(np.log10(k))#D2(k)**2 *self.phi(k)
-        f_1 = quad_vec(integrand, 1e-3, 100000, limit=100)
+        k = np.logspace(-3, 5, 10)
+        int_val = []
+        for i in range(len(self.R)):
+            integrand = self.func(k, i) * 10**self.F(np.log10(k))
+            integr = scipy.integrate.trapezoid(integrand, k)
+            int_val.append(integr)
         for i in range(len(self.sig)):
-            self.sig[i] = np.sqrt(f_1[0][i]).to('')
+            self.sig[i] = np.sqrt(int_val[i])
+        # F = self.getPk()
+        # D2 = lambda k: 10**F(np.log10(k))*k**3/(2*np.pi**2*self.phi(k))
+        # integrand = lambda k: self.func(k)* 10**F(np.log10(k))#D2(k)**2 *self.phi(k)
+        # f_1 = quad_vec(integrand, 1e-3, 100000, limit=100)
+        # for i in range(len(self.sig)):
+        #     self.sig[i] = np.sqrt(f_1[0][i]).to('')
         #self.sig = f_1[0]
         #print("Sig: ", self.sig)
         return self.sig
 
-    def func_der(self,k):
+    def func_der(self,k,i):
         f_1 = k**2/(2*np.pi**2) * u.Mpc #1/k *u.Mpc #
-        f_2 =  3 / ((k * (1 / u.Mpc) * self.R).to('') ** 3)# * self.D2[k] ** 2
-        f_3 = np.sin((k * (1 / u.Mpc) * self.R).to('') * u.rad) - (k * (1 / u.Mpc) * self.R).to('') * np.cos(
-            (k * (1 / u.Mpc) * self.R).to('') * u.rad)
-        f_4 = (-3 / self.R.value) * 1/u.Mpc *(u.Mpc / u.pc).to('') * np.sin((k * (1 / u.Mpc) * self.R).to('') * u.rad)
-        f_5 = 3 * (k * (1 / u.Mpc)) * np.cos((k * (1 / u.Mpc) * self.R).to('') * u.rad)
-        f_6 = 1/u.Mpc * (k ** 2 * (1 / u.Mpc) * self.R).to('') * np.sin((k * (1 / u.Mpc) * self.R).to('') * u.rad)
+        f_2 =  3 / ((k * (1 / u.Mpc) * self.R[i]).to('') ** 3)# * self.D2[k] ** 2
+        f_3 = np.sin((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad) - (k * (1 / u.Mpc) * self.R[i]).to('') * np.cos(
+            (k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
+        f_4 = (-3 / self.R[i].value) * 1/u.Mpc *(u.Mpc / u.pc).to('') * np.sin((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
+        f_5 = 3 * (k * (1 / u.Mpc)) * np.cos((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
+        f_6 = 1/u.Mpc * (k ** 2 * (1 / u.Mpc) * self.R[i]).to('') * np.sin((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
         f = ((f_2 * np.abs(f_3)) * f_1 * f_2 * (f_4 + f_5 + f_6)).to('')
         return f #* self.phi(k)
 
     def der_sig(self):
-        F = self.getPk()
-        D2 = lambda k: 10 ** F(np.log10(k)) * k ** 3 / (2 * np.pi ** 2 * self.phi(k))
-        integrand_der = lambda k: self.func_der(k) * 10**F(np.log10(k)) #D2(k)**2 *self.phi(k)
-        f_1 = quad_vec(integrand_der, 1e-3, 100000, limit=100)
-        self.der = f_1[0]
+        #F = self.getPk()
+        # D2 = lambda k: 10 ** F(np.log10(k)) * k ** 3 / (2 * np.pi ** 2 * self.phi(k))
+        # integrand_der = lambda k: self.func_der(k) * 10**F(np.log10(k)) #D2(k)**2 *self.phi(k)
+        # f_1 = quad_vec(integrand_der, 1e-3, 100000, limit=100)
+        # self.der = f_1[0]
         #print("dsig/dR = ", self.der/self.sig)
+        k = np.logspace(-3, 5, 10)
+        int_val = []
+        for i in range(len(self.R)):
+            integrand = self.func_der(k, i)*10**self.F(np.log10(k))
+            integr = scipy.integrate.trapezoid(integrand, k)
+            int_val.append(integr.value)
+        self.der = int_val
         return self.der #units of 1/u.Mpc
 
     def find_Nl(self):

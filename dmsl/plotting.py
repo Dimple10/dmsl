@@ -42,6 +42,11 @@ def plot_emcee(flatchain, nstars, nsamples,ndims, massprofile, surveyname,
     massprofiletype = massprofile.type
     kwargs = massprofile.kwargs
     flatchain = np.array(flatchain)
+    labels = []
+    if massprofiletype == 'nfw':
+        labels.append('logc200')
+    elif massprofiletype == 'gaussian':
+        labels.append('logR0')
     if usefraction:
         kwargs['f'] = 0
     if massfunction is not None:
@@ -49,6 +54,7 @@ def plot_emcee(flatchain, nstars, nsamples,ndims, massprofile, surveyname,
         mf_args = massfunction.param_names
         for i in range(len(mf_args)):
             print(mf_args[i])
+            labels.append(mf_args[i])
             es = f'post_{surveyname}_{massprofiletype}_{massfunctiontype}_{mf_args[i]}'
             # extra_string = f'post_{surveyname}_{massprofiletype}_{arg}'
             if usefraction:
@@ -118,9 +124,11 @@ def plot_emcee(flatchain, nstars, nsamples,ndims, massprofile, surveyname,
             savefig(fig, outpath, writepdf=0, dpi=100)
     plt.close('all')
     paper_plot()
-    fig = corner.corner(flatchain, labels=['$\\log_{{10}} {c200}$', '$\\delta_{crit}$'],#'$M_{wdm}$','$\\gamma$','$\\beta$'],
+
+    #fig = corner.corner(flatchain, labels=['$\\log_{{10}} {c200}$', 'A','a','b','c'],#'$\\delta_{crit}$'],#'$M_{wdm}$','$\\gamma$','$\\beta$'],
                                             #'$\\log_{{10}} {a_{cdm}}$','$b_{cdm}$','$\\log_{{10}} {c_{cdm}}$'],#['$\\log_{{10}} {a}$','$b$','$\\log_{{10}} {c}$'],
-    #fig = corner.corner(flatchain, labels=['$\\log_{{10}} {f_{pbh}}$'],#$\\log_{{10}} {c200}$','$\\log_{{10}} {a}$','$b$','$\\log_{{10}} {c}$'], #'$\\log_{{10}} {f_{pbh}}$'],
+    #fig = corner.corner(flatchain, labels=['$\\log_{{10}} {c200}$','$\\log_{{10}} {a}$','$b$','$\\log_{{10}} {c}$'], #'$\\log_{{10}} {f_{pbh}}$'],
+    fig = corner.corner(flatchain, labels=labels,
                         # TODO match names to mass function params, mass_function.py
                         quantiles=[0.025, 0.975], fill_contours=True,show_titles=True,
                         contourf_kwargs={'colors': None, 'cmap': 'Blues'}, title_kwargs={"fontsize": 16},
@@ -144,7 +152,7 @@ def plot_chains(samples, outpath):
     paper_plot()
     fig = plt.figure()
     plt.plot(samples[:,:,0])
-    plt.ylabel(r'$\\log_{{10}} {f_{pbh}}$');
+    plt.ylabel(r'$\\log_{{10}} {c_{200}}$');
     #plt.ylabel(r'$m_{wdm}$');
     plt.xlabel(r'N');
     savefig(fig, outpath, writepdf=0, dpi=100)
