@@ -142,7 +142,7 @@ class Sampler():
         print("Sampling..")
         ctr = 0
         # start = time()
-        # sampler.run_mcmc(p0, max_n, progress=True)
+        #sampler.run_mcmc(p0, max_n, progress=True)
         # for sample in sampler.sample(p0, iterations=max_n, progress=True):
         #     # Only check convergence every 100 steps
         #     if sampler.iteration % 100:
@@ -165,7 +165,7 @@ class Sampler():
         # end = time()
         # serial_time = end-start
         # print("Serial took {0:.1f} seconds".format(serial_time))
-
+        # print("Sampling..")
         with Pool() as pool:
             sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike, pool=pool)
             start = time()
@@ -183,14 +183,7 @@ class Sampler():
         # print("thin: {0}".format(thin))
 
         samples = sampler.get_chain(discard=self.ntune, flat=True)
-        print(f"95\% upper limit on fpbh: {np.percentile(samples[:, 0], 95)}")
-        #print(f"95\% upper limit on m wdm: {np.percentile(samples[:,1], 95)}")
-        #print(f"95\% upper limit on gamma: {np.percentile(samples[:, 2], 95)}")
-        #print(f"95\% upper limit on beta: {np.percentile(samples[:, 3], 95)}")
-        # print(f"95\% upper limit on loga_cdm: {np.percentile(samples[:, 4], 95)}")
-        # print(f"95\% upper limit on b_cdm: {np.percentile(samples[:, 5], 95)}")
-        # print(f"95\% upper limit on logc_cdm: {np.percentile(samples[:, 6], 95)}")
-        #print(f"95\% upper limit on k_s: {np.percentile(samples[:, 6], 95)}")
+        print(f"95\% upper limit on c200: {np.percentile(samples[:, 0], 95)}")
 
         ## save samples to class
         self.sampler = sampler
@@ -329,8 +322,8 @@ class Sampler():
         sci = sci_s(x)
         temp = np.random.choice(x, self.nstars, p=sci / sum(sci)) #* dists
         self.beff_avg.append(np.average(temp))
-        # beff = 10**(np.ones(temp.shape)*np.average(temp)) * dists
-        beff = 10 ** (temp) * dists
+        beff = 10**(np.ones(temp.shape)*np.average(temp)) * dists
+        # beff = 10 ** (temp) * dists
         vl = scipy.stats.truncnorm.rvs(a=0, b=550./220, loc=0.,scale =220, size=self.nstars)
         bvec = np.zeros((self.nstars, 2))
         vvec = np.zeros((self.nstars, 2))
@@ -504,20 +497,20 @@ class Sampler():
                 #k_s = pars[i+6]
                 newmf = mf.Tinker(m_l=self.massfunction.m_l,A= A, a= a, b= b, c= c)#, k_b=k_b, n_b=n_b, k_s=k_s)
             elif mftype == 'CDM':
-                loga = pars[i+0]
-                b = pars[i+1]
-                logc = pars[i+2]
+                #loga = pars[i+0]
+                b = pars[i+0]
+                logc = pars[i+1]
                 #print('before CDM makenewmass')
-                newmf = mf.CDM_Test(m_l=self.massfunction.m_l,loga = loga, b = b,logc = logc)
+                newmf = mf.CDM_Test(m_l=self.massfunction.m_l, b = b,logc = logc)
                 #print('after CDM makenewmass')
             elif mftype == 'WDM Stream':
-                m_wdm = pars[i+0]
+                logmwdm = pars[i+0]
                 gamma = pars[i+1]
                 beta = pars[i+2]
                 # loga_cdm = pars[i+3]
                 # b_cdm = pars[i+4]
                 # logc_cdm =pars[i+5]
-                newmf = mf.WDM_stream(m_l=self.massfunction.m_l,m_wdm=m_wdm,gamma=gamma, beta=beta)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
+                newmf = mf.WDM_stream(m_l=self.massfunction.m_l,logmwdm=logmwdm,gamma=gamma, beta=beta)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
             elif mftype == 'Press Schechter':
                 del_crit = pars[i+0]
                 #b = pars[i+1]

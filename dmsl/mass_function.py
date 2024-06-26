@@ -292,31 +292,32 @@ class CDM_Old(MassFunction):
     loga: float = np.log10(3.26*10**-5)
     b: float = -1.9
     logc: float =np.log10(2.57*10**7)
-    nparams: int = 3
-    param_names: list = field(default_factory=lambda:['loga', 'b', 'logc'])
-    param_range: dict = field(default_factory=lambda: {'loga':(-9, 2), 'b': (-6, -0.1), 'logc':(1, 12)})
+    nparams: int = 2
+    param_names: list = field(default_factory=lambda:['b', 'logc'])
+    param_range: dict = field(default_factory=lambda: {'b': (-8, -0.65), 'logc':(-2, 12)})
 
     def find_Nl(self):
         self.den_n_l = (10**self.loga) * ((self.m_l/(10**self.logc))** self.b) ##Units of M_sun^-1
         ##FIXME Higher by a factor of 10 than in the Shutz paper
 
-        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. *12 *8 *10
-        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l,self.m_l)
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
+        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l,self.m_l,initial=0)
 
-        nlens = sum(np.diff(integr))
+        # nlens = sum(np.diff(integr))
         #ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
 
-        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l,self.m_l,initial = integr[0])
+        # integr = scipy.integrate.cumulative_trapezoid(self.den_n_l,self.m_l,initial = integr[0])
         N = np.diff(integr, prepend=integr[0]) #CUMULATIVE TRAPZ ADDS PREVIOUS VAL TO EACH CURRENT VAL SO NP.DIFF
         #temp = np.random.poisson(N)
-
-        #print('temp',temp)
+        # print('N',N)
         m_dm = np.sum(N * self.m_l) * u.Msun
         m_sur = Rho_dm * vol
 
         if m_dm != 0:
             norm = m_sur / m_dm
             l = N * norm
+            l = np.roll(l,-1)
+            # print('N*norm',l)
         else:
             self.n_l[random.randint(0,len(self.n_l))] = 1
             return 0
@@ -326,43 +327,51 @@ class CDM_Old(MassFunction):
 
         if sum(self.n_l)==0:
             self.n_l[random.randint(0,len(self.n_l)-1)] = 1 ##Previously added at 2
-        #print('final nl=', self.n_l)
+        # print('final nl=', self.n_l)
 
     def __post_init__(self):
         self.find_Nl()
 
-
 @dataclass
 class CDM_Test(MassFunction):
     Name: str = 'CDM'
-    m_l: list = field(default_factory=lambda: np.logspace(0, 2, 100))
-    den_n_l: list = field(default_factory=lambda: np.zeros((100)))
-    n_l: list = field(default_factory=lambda: np.zeros((100)))
+    m_l: list = field(default_factory=lambda: np.logspace(0, 2, 10))
+    den_n_l: list = field(default_factory=lambda: np.zeros((10)))
+    n_l: list = field(default_factory=lambda: np.zeros((10)))
     loga: float = np.log10(3.26 * 10 ** -5)
     b: float = -1.9
     logc: float = np.log10(2.57 * 10 ** 7)
-    nparams: int = 3
-    param_names: list = field(default_factory=lambda: ['loga', 'b', 'logc'])
-    param_range: dict = field(default_factory=lambda: {'loga': (-9, 3), 'b': (-8, -0.1), 'logc': (-2, 12)})
+    nparams: int = 2
+    param_names: list = field(default_factory=lambda: ['b', 'logc'])
+    param_range: dict = field(default_factory=lambda: {'b': (-8, -0.01), 'logc': (-2, 12)})
 
     def find_Nl(self):
         self.den_n_l = (10 ** self.loga) * ((self.m_l / (10 ** self.logc)) ** self.b)  ##Units of M_sun^-1
         ##FIXME Higher by a factor of 10 than in the Shutz paper
-
+        # print('dn/dm=',self.den_n_l)
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
         integr = np.insert(integr,0,0)
-        N = np.diff(integr, prepend=0)
+        # print('integr + size:', integr, np.size(integr))
+        N = np.array(np.diff(integr,prepend=0))
+        #N = np.insert(N,0,N[0]) ##maybe extrapolate instead???
+        #N = np.append(N,N[len(N)-1]/100) ##Appending to the highest mass bin (a mass of 1/100 of second highest mass) Overcounting mass?
+        # print('N=',N)
         m_dm = np.sum(N * self.m_l) * u.Msun
+        # ratio = N*self.m_l/m_dm
+        # print('ratio=',ratio)
+        # print('m_dm=', np.log10(m_dm.value))
         m_sur = Rho_dm * vol
         norm = m_sur/m_dm
+        # print('norm=',norm)
         N = norm*N
+        # print('N after norm=', N)
         nlens= sum(N)
-        #print('nlens',nlens)
+        # print('nlens,norm',nlens,norm)
         ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
         c = Counter(ran_samp)
         nl = [c[m_l] for m_l in self.m_l]
-        #print('nl=', nl)
+        # print('nl=', nl)
 
         self.n_l = np.random.poisson(nl)
         if sum(self.n_l) == 0:
@@ -381,7 +390,7 @@ class WDM_stream(MassFunction):
     M_hm: float = 1.0
     gamma: float = 2.7
     beta: float = 0.99
-    m_wdm: float = 6.3 #in KeV
+    logmwdm: float = np.log10(6.3) #in KeV
     omega_wdm: float = 0.25
     loga_cdm: float = np.log10(3.26*10**-5)
     b_cdm: float = -1.9
@@ -391,11 +400,11 @@ class WDM_stream(MassFunction):
     c :float = 1.33
     d :float = 2.66
     nparams: int = 3 #m_wdm, gamma, beta
-    param_names: list = field(default_factory=lambda:['m_wdm', 'gamma', 'beta'])#, 'loga_cdm','b_cdm','logc_cdm'])
-    param_range: dict = field(default_factory=lambda:{'m_wdm': (0.01,1500),'gamma': (0.01, 60), 'beta':(0.1,3)})#,
+    param_names: list = field(default_factory=lambda:['logmwdm', 'gamma', 'beta'])#, 'loga_cdm','b_cdm','logc_cdm'])
+    param_range: dict = field(default_factory=lambda:{'logmwdm': (-2,4),'gamma': (0.01, 60), 'beta':(0.1,3)})#,
                                                      # 'loga_cdm':(-8, 2), 'b_cdm': (-4, -0.01), 'logc_cdm':(4, 10)})
     def calc_Mhm(self):
-        self.M_hm = self.a * (self.m_wdm)** self.b * (self.omega_wdm/0.25)**self.c #* (h/0.7)**2.66
+        self.M_hm = self.a * (10**self.logmwdm)** self.b * (self.omega_wdm/0.25)**self.c #* (h/0.7)**2.66
         #print(self.M_hm)
 
     def find_Nl(self):

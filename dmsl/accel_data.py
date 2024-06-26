@@ -30,16 +30,18 @@ class AccelData():
         rng = np.random.default_rng(seed=seed)
         if wdm:
             cdm = mf.CDM_Test()
-            nfw = mp.NFW(Ml=1.e5*u.Msun, c200= 2.5)
+            nfw = mp.NFW(Ml=1.e5*u.Msun, c200= 13)
             self.cdm_alphal = self.samplealphal([np.log10(13),np.log10(3.26 * 10 ** -5),-1.9,np.log10(2.57 * 10 ** 7)],
-                                                survey,nstars,bool=False,mptype=nfw, mftype=cdm)
+                                                survey,nstars,mptype=nfw, mftype=cdm)
             data = pd.DataFrame(self.cdm_alphal.value,columns=['a_x', 'a_y'])
-            print('CDM data:',type(self.cdm_alphal), self.cdm_alphal)
+            print('CDM data type:',type(self.cdm_alphal))
                 #sampler.make_new_mass([2.5,np.log10(3.26 * 10 ** -5),-1.9,np.log10(2.57 * 10 ** 7)], 'CDM','nfw')
         else:
             if ndims == 2:
                 data = pd.DataFrame(rng.standard_normal(size=(nstars,ndims))*survey.alphasigma.value,
                         columns=['a_x', 'a_y'])
+                # path = STARDATADIR+'Roman_3_2_0_CDMTest.dat'
+                # data = pd.read_csv(path)
             else:
                 data = pd.DataFrame(rng.standard_normal(size=(nstars,ndims))*survey.alphasigma.value,
                         columns=['a'])
@@ -59,9 +61,9 @@ class AccelData():
         print(data.shape)
         make_histogram(data.to_numpy(),int(len(data)/100) + 1, r'\alpha', filepath)
 
-    def lnlike(self,pars,survey,nstars,mptype,mftype,bb,aa):
+    def lnlike(self,pars,survey,nstars,mptype,mftype):
         #print(np.shape(bb))
-        self.alphal = self.samplealphal(pars,survey,nstars,bb,aa,mptype=mptype,mftype=mftype)
+        self.alphal = self.samplealphal(pars,survey,nstars,mptype=mptype,mftype=mftype)
         #FIXME
         # if self.massprofile.type == 'ps':
         #     # if ps, need to do snr check and re-sample if any have too high snr. this stops walkers from getting too stuck.
@@ -81,7 +83,7 @@ class AccelData():
         chisq = -0.5 * np.sum((diff)**2 / survey.alphasigma.value**2 -np.log(2 * np.pi * survey.alphasigma.value**2))
         return chisq
 
-    def samplealphal(self, pars, survey, nstars,bb=None,aa=None,bool=True,mptype=None,mftype=None):
+    def samplealphal(self, pars, survey, nstars,mptype=None,mftype=None):
         rv = gsh.initialize_dist(target=survey.target,
                                  rmax=survey.maxdlens.to(u.kpc).value)
         self.rdist = rv
@@ -108,7 +110,8 @@ class AccelData():
         sci = self.sci_s(x)
         #print('pdf:',sci/sum(sci))
         temp = np.random.choice(x, nstars, p=sci / sum(sci)) #* self.dists
-        self.beff = 10**(np.ones(temp.shape)*np.average(temp)) * self.dists
+        # self.beff = 10**(np.ones(temp.shape)*np.average(temp)) * self.dists
+        self.beff = 10 ** (temp) * self.dists
         #self.beff = 10 ** (np.random.choice(x, nstars, p=sci / sum(sci))) * self.dists
         #print('dist min', np.min(self.dists))
         self.vl = scipy.stats.truncnorm.rvs(a=0, b=550./220, loc=0.,scale=220, size=nstars)
@@ -128,10 +131,10 @@ class AccelData():
         # print('bvec:',bvec)
         # print('vvec:', vvec)
         self.alphal = lm.alphal(newmassprofile, self.bvec, self.vvec)
-        if bool:
-            bb.append(np.linalg.norm(self.bvec, axis=1))
-            #print('beff vs bvec',np.isclose(np.linalg.norm(self.bvec, axis=1),self.beff,atol=0))
-            aa.append(self.alphal)
+        # if bool:
+        #     bb.append(np.linalg.norm(self.bvec, axis=1))
+        #     #print('beff vs bvec',np.isclose(np.linalg.norm(self.bvec, axis=1),self.beff,atol=0))
+        #     aa.append(self.alphal)
         #end = time.perf_counter()
         #print(f'Time taken for lensing model: {(end-start):.6f} second')
         return self.alphal
@@ -152,23 +155,23 @@ class AccelData():
             a = pars[i+1]
             b = pars[i+2]
             c = pars[i+3]
-            k_b = pars[i+4]
-            n_b = pars[i+5]
-            k_s = pars[i+6]
-            newmf = mf.Tinker(m_l=mft.m_l,A= A, a= a, b= b, c= c, k_b=k_b, n_b=n_b, k_s=k_s)
+            #k_b = pars[i+4]
+            #n_b = pars[i+5]
+            #k_s = pars[i+6]
+            newmf = mf.Tinker(m_l=mft.m_l,A= A, a= a, b= b, c= c)#, k_b=k_b, n_b=n_b, k_s=k_s)
         elif mftype == 'CDM':
-            loga = pars[i+0]
-            b = pars[i+1]
-            logc = pars[i+2]
-            newmf = mf.CDM_Test(m_l=mft.m_l,loga = loga, b = b,logc = logc)
+            # loga = pars[i+0]
+            b = pars[i+0]
+            logc = pars[i+1]
+            newmf = mf.CDM_Test(m_l=mft.m_l, b = b,logc = logc)
         elif mftype == 'WDM Stream':
-            m_wdm = pars[i+0]
+            logmwdm = pars[i+0]
             gamma = pars[i+1]
             beta = pars[i+2]
             # loga_cdm = pars[i+3]
             # b_cdm = pars[i+4]
             # logc_cdm =pars[i+5]
-            newmf = mf.WDM_stream(m_l=mft.m_l,m_wdm=m_wdm,gamma=gamma, beta=beta)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
+            newmf = mf.WDM_stream(m_l=mft.m_l,logmwdm=logmwdm,gamma=gamma, beta=beta)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
         elif mftype == 'Press Schechter':
             del_crit = pars[i+0]
             newmf = mf.PressSchechter_test(m_l=mft.m_l,del_crit = del_crit)
