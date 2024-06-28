@@ -10,7 +10,7 @@ from dataclasses import dataclass,field
 import dmsl.survey as surv
 from scipy.integrate import quad_vec
 from collections import Counter
-from classy import Class
+#from classy import Class
 import scipy
 import random
 import time
