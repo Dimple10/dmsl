@@ -446,27 +446,28 @@ class WDM_stream(MassFunction):
 
 @dataclass
 class WDM_lensing(MassFunction):
-    Name: str = 'WDM'
+    Name: str = 'WDM Lensing'
     m_l: list = field(default_factory=lambda: np.logspace(0, 2, 100))
     n_l: list = field(default_factory=lambda: np.zeros((100)))
     den_n_l: list = field(default_factory=lambda: np.zeros((100)))
     M_hm: float = 1.0
     beta: float = 1.3 #Shutz reference
-    m_wdm: float = 6.3 #in KeV
+    mwdm: float = 6.3 #in KeV
     omega_wdm: float = cosmo.Odm0
     a: float = 1.65 * 10 ** 10
     b: float = -3.33
     c: float = 1.33
     d: float = 2.66
-    param_names: list = field(default_factory=lambda:['alpha', 'M_0']) #FIXME To correct vals if needed
-    param_range: dict = field(default_factory=lambda:{'alpha': (0.1, 2), 'M_0': (1, 100)})
+    nparams = 2
+    param_names: list = field(default_factory=lambda:['mwdm','beta']) #FIXME To correct vals if needed
+    param_range: dict = field(default_factory=lambda:{'mwdm':(0.01,1000),'beta': (0.01, 10)})
 
     def calc_Mhm(self):
-        self.M_hm = self.a * self.m_wdm**self.b * (self.omega_wdm/0.25)**self.c * (h/0.7)**self.d
+        self.M_hm = self.a * self.mwdm**self.b * (self.omega_wdm/0.25)**self.c * (h/0.7)**self.d
         #print(self.M_hm)
 
     def find_Nl(self):
-        cdm = CDM(m_l=self.m_l) #return dN/dM, we need dN/dlnM
+        cdm = CDM_Test(m_l=self.m_l) #return dN/dM, we need dN/dlnM
         cdm_den_nl = cdm.den_n_l * cdm.m_l
         self.den_n_l = (1 + self.M_hm/self.m_l)**(-1*self.beta) * cdm_den_nl
         #Convert from dN/dlnM to dN/dM--

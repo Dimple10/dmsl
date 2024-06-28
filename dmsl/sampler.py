@@ -405,7 +405,7 @@ class Sampler():
 
     def load_data(self):
         print('Creating data vector')
-        if self.massfunction.Name == 'WDM Stream':
+        if (self.massfunction.Name == 'WDM Stream' or self.massfunction.Name == 'WDM Lensing'):
             self.data = AccelData(self.survey, nstars=self.nstars,
                 ndims=self.ndims,wdm=True).data.to_numpy()
         else:
@@ -511,6 +511,10 @@ class Sampler():
                 # b_cdm = pars[i+4]
                 # logc_cdm =pars[i+5]
                 newmf = mf.WDM_stream(m_l=self.massfunction.m_l,logmwdm=logmwdm,gamma=gamma, beta=beta)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
+            elif mftype == 'WDM Lensing':
+                mwdm = pars[i+0]
+                beta = pars[i+1]
+                newmf = mf.WDM_lensing(m_l=self.massfunction.m_l,mwdm=mwdm, beta=beta)
             elif mftype == 'Press Schechter':
                 del_crit = pars[i+0]
                 #b = pars[i+1]

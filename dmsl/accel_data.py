@@ -164,6 +164,10 @@ class AccelData():
             b = pars[i+0]
             logc = pars[i+1]
             newmf = mf.CDM_Test(m_l=mft.m_l, b = b,logc = logc)
+        elif mftype == 'WDM Lensing':
+            mwdm = pars[i+0]
+            beta = pars[i+1]
+            newmf = mf.WDM_lensing(m_l=mft.m_l,mwdm=mwdm, beta=beta)
         elif mftype == 'WDM Stream':
             logmwdm = pars[i+0]
             gamma = pars[i+1]
