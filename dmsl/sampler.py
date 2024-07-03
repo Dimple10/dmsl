@@ -488,14 +488,13 @@ class Sampler():
                 logM0 = pars[i+1]
                 newmf = mf.PowerLaw(m_l=self.massfunction.m_l,logM_0=logM0, logalpha=logalpha)
             elif mftype == 'Tinker':
-                A = pars[i+0]
-                a = pars[i+1]
-                b = pars[i+2]
-                c = pars[i+3]
+                a = pars[i+0]
+                b = pars[i+1]
+                c = pars[i+2]
                 #k_b = pars[i+4]
                 #n_b = pars[i+5]
                 #k_s = pars[i+6]
-                newmf = mf.Tinker(m_l=self.massfunction.m_l,A= A, a= a, b= b, c= c)#, k_b=k_b, n_b=n_b, k_s=k_s)
+                newmf = mf.Tinker(m_l=self.massfunction.m_l,a= a, b= b, c= c)#, k_b=k_b, n_b=n_b, k_s=k_s)
             elif mftype == 'CDM':
                 #loga = pars[i+0]
                 b = pars[i+0]

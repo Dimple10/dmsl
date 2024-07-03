@@ -64,7 +64,7 @@ class PowerLaw(MassFunction):
         for i in range(len(self.m_l)):
             self.den_n_l[i] = np.ceil((self.m_l[i] / 10**self.logM_0) ** (10**self.logalpha))
 
-        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
         integr = np.insert(integr, 0, 0)
         N = np.diff(integr, prepend=0)
@@ -84,30 +84,29 @@ class PowerLaw(MassFunction):
     def __post_init__(self):
         self.find_Nl()
 
-
 @dataclass
 class Tinker(MassFunction):
     Name: str = 'Tinker'
-    m_l: list = field(default_factory=lambda: np.logspace(4, 12, 10))
-    den_n_l: list = field(default_factory=lambda: np.zeros((10)))
-    n_l: list = field(default_factory=lambda: np.zeros((10)))
+    m_l: list = field(default_factory=lambda: np.logspace(4, 12, 100))
+    den_n_l: list = field(default_factory=lambda: np.zeros((100)))
+    n_l: list = field(default_factory=lambda: np.zeros((100)))
     A: float = 0.260  #FIXME Used values from colossus (https://bitbucket.org/bdiemer/colossus/src/master/colossus/lss/mass_function.py)
     a: float = 2.66 #power
     b: float = 1.41
     c: float = 2.44 #power
-    sig: list = field(default_factory=lambda: [1 for i in range(10)])
-    der: list = field(default_factory=lambda: [1 for i in range(10)])
-    R: list = field(default_factory=lambda: [1 for i in range(10)])
-    f: list = field(default_factory=lambda: [1 for i in range(10)])
+    sig: list = field(default_factory=lambda: [1 for i in range(100)])
+    der: list = field(default_factory=lambda: [1 for i in range(100)])
+    R: list = field(default_factory=lambda: [1 for i in range(100)])
+    f: list = field(default_factory=lambda: [1 for i in range(100)])
     A_s: float = 2.105 * 10 ** -9
     n_s: float = 0.9665
     k_b: float = 13 * (1 / u.Mpc)  # Units of Mpc^-1
     n_b: float = 2.0  # or 3.0 (Fig #7 in Power of Halometry)
     k_s: float = 0.05 * (1 / u.Mpc)  # Units of Mpc^-1
     #cosmo:astropy.cosmology.Cosmology() = cosmo
-    nparams: int = 4
-    param_names: list = field(default_factory=lambda:['A', 'a', 'b', 'c'])#, 'k_b', 'n_b', 'k_s'])
-    param_range: dict = field(default_factory=lambda:{'A': (0.001, 5), 'a': (0.01, 10), 'b':(0.01, 10), 'c':(0.01, 10)})#, 'k_b':(1,100),'n_b':(1,5), 'k_s':(0,1)})
+    nparams: int = 3
+    param_names: list = field(default_factory=lambda:['a', 'b', 'c'])#, 'k_b', 'n_b', 'k_s'])
+    param_range: dict = field(default_factory=lambda:{ 'a': (1.85, 5), 'b':(0.01, 100), 'c':(1.85, 5)})#, 'k_b':(1,100),'n_b':(1,5), 'k_s':(0,1)})
 
     def getPk(self):
         #start=time.time()
@@ -131,7 +130,7 @@ class Tinker(MassFunction):
 
     def calc_f(self):
         self.f = (self.A * ((np.array(self.sig) / self.b) ** (-1 * self.a) + 1)) * np.exp(
-            (-1 * self.c / np.array((self.sig)) ** 2))
+            (-1 * self.c / (np.array((self.sig)) ** 2)))
        # print("f(sig)= ", self.f)
 
     def radius(self):
@@ -148,7 +147,7 @@ class Tinker(MassFunction):
         return f #* self.phi(k)
 
     def calc_sig(self):
-        k = np.logspace(-3, 5, 10)
+        k = np.logspace(-3, 5, 100)
         int_val = []
         for i in range(len(self.R)):
             integrand = self.func(k, i) * 10**self.F(np.log10(k))
@@ -184,7 +183,7 @@ class Tinker(MassFunction):
         # f_1 = quad_vec(integrand_der, 1e-3, 100000, limit=100)
         # self.der = f_1[0]
         #print("dsig/dR = ", self.der/self.sig)
-        k = np.logspace(-3, 5, 10)
+        k = np.logspace(-3, 5, 100)
         int_val = []
         for i in range(len(self.R)):
             integrand = self.func_der(k, i)*10**self.F(np.log10(k))
@@ -198,7 +197,7 @@ class Tinker(MassFunction):
             self.den_n_l[i] = (4 / 3 * np.pi * (Rho_mean.to(u.M_sun/u.Mpc**3).value)) ** (-1 / 3) * 1/3 * (self.m_l[i]) ** (-2 / 3)* \
                               self.f[i] * (Rho_mean.to(u.M_sun/u.Mpc**3).value) / self.m_l[i] * (-self.der[i]/self.sig[i]**2) #*self.m_l[i]
         #Calculating the normalization
-        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
         integr = np.insert(integr, 0, 0)
         N = np.diff(integr, prepend=0)
@@ -416,7 +415,7 @@ class WDM_stream(MassFunction):
         self.den_n_l = self.den_n_l / self.m_l
         #print('wdm den:',self.den_n_l)
 
-        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
         integr = np.insert(integr, 0, 0)
         N = np.diff(integr, prepend=0)
@@ -460,7 +459,7 @@ class WDM_lensing(MassFunction):
     d: float = 2.66
     nparams = 2
     param_names: list = field(default_factory=lambda:['mwdm','beta']) #FIXME To correct vals if needed
-    param_range: dict = field(default_factory=lambda:{'mwdm':(0.01,1000),'beta': (0.01, 10)})
+    param_range: dict = field(default_factory=lambda:{'mwdm':(0.01,500),'beta': (0.58, 8)})
 
     def calc_Mhm(self):
         self.M_hm = self.a * self.mwdm**self.b * (self.omega_wdm/0.25)**self.c * (h/0.7)**self.d
@@ -516,7 +515,7 @@ class PBH(MassFunction): ##Check on normalization
     def find_Nl(self):
         self.den_n_l = 10**self.logf_pbh/(np.sqrt(2*np.pi) * 10**self.sig *self.m_l)*\
                        np.exp(-np.log(self.m_l/10**self.m_c)**2/(2*10**self.sig))  ##Units of M_sun^-1
-        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
         integr = np.insert(integr,0,0)
         N = np.diff(integr, prepend=0)
