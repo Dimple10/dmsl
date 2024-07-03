@@ -46,7 +46,6 @@ class MassFunction:
     def update(self):
         self.__post_init__()
 
-
 @dataclass
 class PowerLaw(MassFunction):
     Name: str = 'PowerLaw'
