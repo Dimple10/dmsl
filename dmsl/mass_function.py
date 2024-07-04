@@ -10,7 +10,7 @@ from dataclasses import dataclass,field
 import dmsl.survey as surv
 from scipy.integrate import quad_vec
 from collections import Counter
-#from classy import Class
+from classy import Class
 import scipy
 import random
 import time
@@ -18,6 +18,7 @@ import time
 RHO_CRIT = cosmo.critical_density(0.)
 Rho_mean = cosmo.Om0 * RHO_CRIT
 Rho_dm = gsh.density(8. * u.kpc)
+# Rho_dm = 7.23e10*(u.Msun/u.kpc**3)
 h = cosmo.h
 
 @dataclass #(example in survey.py)
@@ -105,7 +106,7 @@ class Tinker(MassFunction):
     #cosmo:astropy.cosmology.Cosmology() = cosmo
     nparams: int = 3
     param_names: list = field(default_factory=lambda:['a', 'b', 'c'])#, 'k_b', 'n_b', 'k_s'])
-    param_range: dict = field(default_factory=lambda:{ 'a': (1.85, 5), 'b':(0.01, 100), 'c':(1.85, 5)})#, 'k_b':(1,100),'n_b':(1,5), 'k_s':(0,1)})
+    param_range: dict = field(default_factory=lambda:{ 'a': (1.8, 5), 'b':(0.001, 100), 'c':(1.8, 5)})#, 'k_b':(1,100),'n_b':(1,5), 'k_s':(0,1)})
 
     def getPk(self):
         #start=time.time()
@@ -352,13 +353,7 @@ class CDM_Test(MassFunction):
         integr = np.insert(integr,0,0)
         # print('integr + size:', integr, np.size(integr))
         N = np.array(np.diff(integr,prepend=0))
-        #N = np.insert(N,0,N[0]) ##maybe extrapolate instead???
-        #N = np.append(N,N[len(N)-1]/100) ##Appending to the highest mass bin (a mass of 1/100 of second highest mass) Overcounting mass?
-        # print('N=',N)
         m_dm = np.sum(N * self.m_l) * u.Msun
-        # ratio = N*self.m_l/m_dm
-        # print('ratio=',ratio)
-        # print('m_dm=', np.log10(m_dm.value))
         m_sur = Rho_dm * vol
         norm = m_sur/m_dm
         # print('norm=',norm)
