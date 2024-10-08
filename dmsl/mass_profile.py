@@ -21,7 +21,7 @@ class MassProfile:
         self.kwargs = kwargs
 
     def M(self):
-        raise NotImplementedError("""Woops! You need to specify an actual halo
+        raise NotImplementedError("""Whoops! You need to specify an actual halo
         type before you can get the mass profile!""")
         pass
 

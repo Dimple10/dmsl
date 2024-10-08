@@ -302,13 +302,18 @@ class Sampler():
             priorpdf = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
                            n=nlens)
         else:
-            newmassprofile, newmassfunction = self.make_new_mass(pars)
+            newmp, newmassfunction = self.make_new_mass(pars)
             nlens = np.ceil(f*newmassfunction.n_l)
             if sum(nlens) ==0:
                 print('no lens in sampler 2')
                 nlens[0] = 1
             priorpdf = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
                 n=sum(nlens))
+            if np.size(newmp) > 1:
+                mp_indices = np.random.randint(0, len(newmp), self.nstars)
+                newmassprofile = [newmp[i] for i in mp_indices]
+            else:
+                newmassprofile = newmp
         #print(priorpdf, self.bs, sum(nlens))
         if np.any(np.isnan(priorpdf)):
             return -np.inf
@@ -405,7 +410,9 @@ class Sampler():
 
     def load_data(self):
         print('Creating data vector')
-        if (self.massfunction.Name == 'WDM Stream' or self.massfunction.Name == 'WDM Lensing'):
+        if False: #Switch to if statement below for CDM as null hypothesis for WDM
+        #if (self.massfunction.Name == 'WDM Stream' or self.massfunction.Name == 'WDM Lensing'):
+            print('inside WDM') #FIXME
             self.data = AccelData(self.survey, nstars=self.nstars,
                 ndims=self.ndims,wdm=True).data.to_numpy()
         else:
@@ -474,7 +481,7 @@ class Sampler():
         self.flatchain = flatchain
         return flatchain, loglike
 
-    def make_new_mass(self,pars): #FIXME For mf does this need to be mf + mp? or just mf?
+    def make_new_mass(self,pars):
         #print('In make new mass')
         mptype = self.massprofile.type
         kwargs = self.massprofile.kwargs

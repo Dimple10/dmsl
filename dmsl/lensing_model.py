@@ -31,9 +31,9 @@ def alphal(Ml, bvec, vvec):
         b = np.linalg.norm(bvec)
         v = np.linalg.norm(vvec)
     accmag = 4 * const.G * v**2 / (const.c**2 * b**3)
-    end1= time.perf_counter()
+    # end1= time.perf_counter()
     vec_part = alphal_vec(Ml, bvec, vvec)
-    start2=time.perf_counter()
+    # start2=time.perf_counter()
     if accmag.ndim == 1:
         alphal = accmag[:,np.newaxis] * vec_part
     else:
@@ -101,11 +101,22 @@ def alphal_vec(Ml, bvec, vvec, vdotvec = None):
     # print(type(Ml),np.size(Ml))
     if np.size(Ml) > 1:
         # print('here', type(Ml[0]))
-        Term1, Term2, Term3 = 0,0,0
-        for m in Ml:
-            Term1 += m.M(b)[:, np.newaxis] * Aterm #FIXME Loop over all Ml (add them all?)
-            Term2 += (m.Mprime(b) * b)[:, np.newaxis] * Bterm
-            Term3 += (m.Mpprime(b) * b**2)[:, np.newaxis] * Cterm
+        # Term1, Term2, Term3 = 0,0,0
+        # for m in Ml:
+        #     Term1 += m.M(b)[:, np.newaxis] * Aterm #FIXME Loop over all Ml (add them all?)
+        #     Term2 += (m.Mprime(b) * b)[:, np.newaxis] * Bterm
+        #     Term3 += (m.Mpprime(b) * b**2)[:, np.newaxis] * Cterm
+        t1_list, t2_list, t3_list = [], [], []
+        for m, bi in zip(Ml, b):
+            t1_list.append(m.M(bi).value)
+            t2_list.append(m.Mprime(bi).value)
+            t3_list.append(m.Mpprime(bi).value)
+        t1_list = np.array(t1_list) * u.Msun
+        t2_list = np.array(t2_list) * (u.Msun / u.kpc)
+        t3_list = np.array(t3_list) * (u.Msun / u.kpc**2)
+        Term1 = t1_list[:, np.newaxis] * Aterm
+        Term2 = (t2_list * b)[:, np.newaxis] * Bterm
+        Term3 = (t3_list * b ** 2)[:, np.newaxis] * Cterm
     else:
         #print('here', type(Ml),np.size(Ml), np.size(b))
         Term1 = Ml.M(b)[:, np.newaxis] * Aterm
