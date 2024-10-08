@@ -59,8 +59,8 @@ wfirstlike = s.WFIRSTLike(alphasigma = 0.1*u.uas/u.yr**2*(nn/(1.e11*0.05*4*np.pi
 
 time1 = datetime.datetime.now()
 print("Running Tinker + nfw case, no fraction")
-s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e2), survey=roman,
-        MassProfile=nfw, MassFunction=tinker, nchains=8, ndims=2)
+s = Sampler(nstars=int(nn), ntune=int(1e3), nsamples=int(1e4), survey=roman,
+        MassProfile=nfw, MassFunction=tinker, nchains=128, ndims=2)
 print('This took',str(datetime.datetime.now()-time1))
 
 #time1 = datetime.datetime.now()
