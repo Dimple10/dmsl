@@ -125,9 +125,9 @@ def plot_emcee(flatchain, nstars, nsamples,ndims, massprofile, surveyname,
     plt.close('all')
     paper_plot()
 
-    #fig = corner.corner(flatchain, labels=['$\\log_{{10}} {c200}$', 'A','a','b','c'],#'$\\delta_{crit}$'],#'$M_{wdm}$','$\\gamma$','$\\beta$'],
+    #fig = corner.corner(flatchain, labels=['$\\log_{{10}} {c200}$','$\\log_{{10}} {m_{wdm}}$','$\\gamma$','$\\beta$'],#'$\\delta_{crit}$']
                                             #'$\\log_{{10}} {a_{cdm}}$','$b_{cdm}$','$\\log_{{10}} {c_{cdm}}$'],#['$\\log_{{10}} {a}$','$b$','$\\log_{{10}} {c}$'],
-    #fig = corner.corner(flatchain, labels=['$\\log_{{10}} {c200}$','$\\log_{{10}} {a}$','$b$','$\\log_{{10}} {c}$'], #'$\\log_{{10}} {f_{pbh}}$'],
+    #fig = corner.corner(flatchain, labels=['$\\log_{{10}} {f_{pbh}}$'],
     fig = corner.corner(flatchain, labels=labels,
                         # TODO match names to mass function params, mass_function.py
                         quantiles=[0.025, 0.975], fill_contours=True,show_titles=True,
@@ -145,7 +145,7 @@ def plot_emcee(flatchain, nstars, nsamples,ndims, massprofile, surveyname,
     outpath = make_file_path(RESULTSDIR, [np.log10(nstars),
         np.log10(nsamples), ndims],
         extra_string=extra_string, ext='.png')
-    savefig(fig, outpath, writepdf=0, dpi=200)
+    savefig(fig, outpath, writepdf=1, dpi=300)
 
 def plot_chains(samples, outpath):
     plt.close('all')

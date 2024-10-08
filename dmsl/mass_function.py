@@ -196,14 +196,18 @@ class Tinker(MassFunction):
         for i in range(len(self.n_l)): ##n_l units of 1/Mpc**3
             self.den_n_l[i] = (4 / 3 * np.pi * (Rho_mean.to(u.M_sun/u.Mpc**3).value)) ** (-1 / 3) * 1/3 * (self.m_l[i]) ** (-2 / 3)* \
                               self.f[i] * (Rho_mean.to(u.M_sun/u.Mpc**3).value) / self.m_l[i] * (-self.der[i]/self.sig[i]**2) #*self.m_l[i]
+
         #Calculating the normalization
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
         integr = np.insert(integr, 0, 0)
         N = np.diff(integr, prepend=0)
+        # This is dn/dM not dN/dM as everything else so multiplying by vol already!
+        N *= vol.value
         m_dm = np.sum(N * self.m_l) * u.Msun
         m_sur = Rho_dm * vol
         norm = m_sur / m_dm
+        print('Tinker norm=', norm)
         N = norm * N
 
         nlens = sum(N)
@@ -349,6 +353,7 @@ class CDM_Test(MassFunction):
         ##FIXME Higher by a factor of 10 than in the Shutz paper
         # print('dn/dm=',self.den_n_l)
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
+        # print('vol=',vol)
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
         integr = np.insert(integr,0,0)
         # print('integr + size:', integr, np.size(integr))
@@ -356,7 +361,7 @@ class CDM_Test(MassFunction):
         m_dm = np.sum(N * self.m_l) * u.Msun
         m_sur = Rho_dm * vol
         norm = m_sur/m_dm
-        # print('norm=',norm)
+        # print('CDM norm=',norm)
         N = norm*N
         # print('N after norm=', N)
         nlens= sum(N)
@@ -416,6 +421,7 @@ class WDM_stream(MassFunction):
         m_dm = np.sum(N * self.m_l) * u.Msun
         m_sur = Rho_dm * vol
         norm = m_sur / m_dm
+        # print('WDM norm=', norm)
         N = norm * N
 
         nlens = sum(N)
@@ -520,6 +526,7 @@ class PBH(MassFunction): ##Check on normalization
         m_dm = np.sum(N* self.m_l) * u.Msun
         m_sur = Rho_dm * vol
         norm = m_sur/m_dm
+        # print('PBH norm=', norm)
         N = norm*N
         #print(m_dm, N)
         nlens= sum(N)

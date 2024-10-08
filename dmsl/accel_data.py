@@ -90,7 +90,12 @@ class AccelData():
         #print('stars',nstars)
         self.bs = np.logspace(-8, np.log10(np.sqrt(2)*survey.fov_rad),nstars)
         #print('bs min',np.min(self.bs))
-        newmassprofile, newmassfunction = self.make_new_mass(pars,mptype,mftype)
+        newmp, newmassfunction = self.make_new_mass(pars,mptype,mftype)
+        if np.size(newmp) > 1:
+            mp_indices=np.random.randint(0, len(newmp), nstars)
+            newmassprofile = [newmp[i] for i in mp_indices]
+        else:
+            newmassprofile = newmp
         nlens = newmassfunction.n_l
         if sum(nlens) ==0:
             nlens[0] = 1
@@ -110,8 +115,8 @@ class AccelData():
         sci = self.sci_s(x)
         #print('pdf:',sci/sum(sci))
         temp = np.random.choice(x, nstars, p=sci / sum(sci)) #* self.dists
-        # self.beff = 10**(np.ones(temp.shape)*np.average(temp)) * self.dists
-        self.beff = 10 ** (temp) * self.dists
+        self.beff = 10**(np.ones(temp.shape)*np.average(temp)) * self.dists
+        # self.beff = 10 ** (temp) * self.dists
         #self.beff = 10 ** (np.random.choice(x, nstars, p=sci / sum(sci))) * self.dists
         #print('dist min', np.min(self.dists))
         self.vl = scipy.stats.truncnorm.rvs(a=0, b=550./220, loc=0.,scale=220, size=nstars)
@@ -151,14 +156,14 @@ class AccelData():
             logM0 = pars[i+1]
             newmf = mf.PowerLaw(m_l=mft.m_l,logM_0=logM0, logalpha=logalpha)
         elif mftype == 'Tinker':
-            A = pars[i+0]
-            a = pars[i+1]
-            b = pars[i+2]
-            c = pars[i+3]
+            # A = pars[i+0]
+            a = pars[i+0]
+            b = pars[i+1]
+            c = pars[i+2]
             #k_b = pars[i+4]
             #n_b = pars[i+5]
             #k_s = pars[i+6]
-            newmf = mf.Tinker(m_l=mft.m_l,A= A, a= a, b= b, c= c)#, k_b=k_b, n_b=n_b, k_s=k_s)
+            newmf = mf.Tinker(m_l=mft.m_l, a= a, b= b, c= c)#, k_b=k_b, n_b=n_b, k_s=k_s)
         elif mftype == 'CDM':
             # loga = pars[i+0]
             b = pars[i+0]
