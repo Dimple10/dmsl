@@ -493,7 +493,7 @@ class Sampler():
             if mftype == 'PowerLaw':
                 logalpha = pars[i+0]
                 logM0 = pars[i+1]
-                newmf = mf.PowerLaw(m_l=self.massfunction.m_l,logM_0=logM0, logalpha=logalpha)
+                newmf = mf.PowerLaw(m_l=self.massfunction.m_l,logM_0=logM0, logalpha=logalpha,sur=self.survey)
             elif mftype == 'Tinker':
                 a = pars[i+0]
                 b = pars[i+1]
@@ -501,13 +501,13 @@ class Sampler():
                 #k_b = pars[i+4]
                 #n_b = pars[i+5]
                 #k_s = pars[i+6]
-                newmf = mf.Tinker(m_l=self.massfunction.m_l,a= a, b= b, c= c)#, k_b=k_b, n_b=n_b, k_s=k_s)
+                newmf = mf.Tinker(m_l=self.massfunction.m_l,a= a, b= b, c= c,sur=self.survey)#, k_b=k_b, n_b=n_b, k_s=k_s)
             elif mftype == 'CDM':
                 #loga = pars[i+0]
                 b = pars[i+0]
                 logc = pars[i+1]
                 #print('before CDM makenewmass')
-                newmf = mf.CDM_Test(m_l=self.massfunction.m_l, b = b,logc = logc)
+                newmf = mf.CDM_Test(m_l=self.massfunction.m_l, b = b,logc = logc,sur=self.survey)
                 #print('after CDM makenewmass')
             elif mftype == 'WDM Stream':
                 logmwdm = pars[i+0]
@@ -516,22 +516,22 @@ class Sampler():
                 # loga_cdm = pars[i+3]
                 # b_cdm = pars[i+4]
                 # logc_cdm =pars[i+5]
-                newmf = mf.WDM_stream(m_l=self.massfunction.m_l,logmwdm=logmwdm,gamma=gamma, beta=beta)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
+                newmf = mf.WDM_stream(m_l=self.massfunction.m_l,logmwdm=logmwdm,gamma=gamma, beta=beta,sur=self.survey)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
             elif mftype == 'WDM Lensing':
                 mwdm = pars[i+0]
                 beta = pars[i+1]
-                newmf = mf.WDM_lensing(m_l=self.massfunction.m_l,mwdm=mwdm, beta=beta)
+                newmf = mf.WDM_lensing(m_l=self.massfunction.m_l,mwdm=mwdm, beta=beta,sur=self.survey)
             elif mftype == 'Press Schechter':
                 del_crit = pars[i+0]
                 #b = pars[i+1]
                 #logc = pars[i+2]
-                newmf = mf.PressSchechter_test(m_l=self.massfunction.m_l,del_crit = del_crit)#,b = b,logc = logc)
+                newmf = mf.PressSchechter_test(m_l=self.massfunction.m_l,del_crit = del_crit,sur=self.survey)#,b = b,logc = logc)
             elif mftype == 'PBH':
                 #print('inside pbh make new mass')
                 logf_pbh = pars[i+0]
                 #b = pars[i+1]
                 #logc = pars[i+2]
-                newmf = mf.PBH(m_l=self.massfunction.m_l,logf_pbh = logf_pbh)
+                newmf = mf.PBH(m_l=self.massfunction.m_l,logf_pbh = logf_pbh,sur=self.survey)
             #else:
              #   raise NotImplementedError("""Need to add this mass function to
               #  sampler.""")
