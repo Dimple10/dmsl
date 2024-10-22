@@ -19,6 +19,8 @@ RHO_CRIT = cosmo.critical_density(0.)
 Rho_mean = cosmo.Om0 * RHO_CRIT
 Rho_dm = gsh.density(8. * u.kpc)
 # Rho_dm = 7.23e10*(u.Msun/u.kpc**3)
+MW_vol = 4/3*np.pi*(100*u.kpc)**3 #Milky Way vol approx. as a sphere
+# MW_vol = np.pi*(15*u.kpc)**2 * 3*u.kpc #MW as a disk (not halo just galaxy)
 h = cosmo.h
 
 @dataclass #(example in survey.py)
@@ -29,7 +31,7 @@ class MassFunction:
 
     @property
     def check_density(self):
-        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens**3 / 3.
+        self.vol = self.sur.fov_rad ** 2 * self.sur.maxdlens**3 / 3.
         m_dm = (Rho_dm * vol).to(u.Msun)
         DM = m_dm.to_value()
         sum = np.sum(self.n_l*self.m_l)
@@ -204,10 +206,11 @@ class Tinker(MassFunction):
         N = np.diff(integr, prepend=0)
         # This is dn/dM not dN/dM as everything else so multiplying by vol already!
         N *= vol.value
-        m_dm = np.sum(N * self.m_l) * u.Msun
-        m_sur = Rho_dm * vol
-        norm = m_sur / m_dm
-        print('Tinker norm=', norm)
+        # m_dm = np.sum(N * self.m_l) * u.Msun
+        # m_sur = Rho_dm * vol
+        # norm = m_sur / m_dm
+        # print('Tinker norm=', norm)
+        norm = vol/MW_vol
         N = norm * N
 
         nlens = sum(N)
@@ -358,9 +361,10 @@ class CDM_Test(MassFunction):
         integr = np.insert(integr,0,0)
         # print('integr + size:', integr, np.size(integr))
         N = np.array(np.diff(integr,prepend=0))
-        m_dm = np.sum(N * self.m_l) * u.Msun
-        m_sur = Rho_dm * vol
-        norm = m_sur/m_dm
+        # m_dm = np.sum(N * self.m_l) * u.Msun
+        # m_sur = Rho_dm * vol
+        # norm = m_sur/m_dm
+        norm = vol / MW_vol
         # print('CDM norm=',norm)
         N = norm*N
         # print('N after norm=', N)
@@ -418,9 +422,10 @@ class WDM_stream(MassFunction):
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
         integr = np.insert(integr, 0, 0)
         N = np.diff(integr, prepend=0)
-        m_dm = np.sum(N * self.m_l) * u.Msun
-        m_sur = Rho_dm * vol
-        norm = m_sur / m_dm
+        # m_dm = np.sum(N * self.m_l) * u.Msun
+        # m_sur = Rho_dm * vol
+        # norm = m_sur / m_dm
+        norm = vol / MW_vol
         # print('WDM norm=', norm)
         N = norm * N
 
@@ -509,8 +514,8 @@ class PBH(MassFunction): ##Check on normalization
 
     def calc(self):
         #print('m_l:',self.m_l)
-        self.m_c = np.mean(np.log10(self.m_l)) #FIXME see if you need np.log
-        self.sig = np.std(np.log10(self.m_l))
+        self.m_c = np.mean(np.log(self.m_l)) #FIXME see if you need np.log
+        self.sig = np.std(np.log(self.m_l))
         #print('m_c,sig:',self.m_c,self.sig)
     def find_Nl(self):
         self.den_n_l = 10**self.logf_pbh/(np.sqrt(2*np.pi) * 10**self.sig *self.m_l)*\
@@ -519,26 +524,24 @@ class PBH(MassFunction): ##Check on normalization
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
         integr = np.insert(integr,0,0)
         N = np.diff(integr, prepend=0)
-        #print('N before norm',N)
-        #print('logf_pbh:', self.logf_pbh)
-        #print('dn/dm:',self.den_n_l)
-        #N=self.den_n_l
+        # print('N before norm',N)
         m_dm = np.sum(N* self.m_l) * u.Msun
         m_sur = Rho_dm * vol
         norm = m_sur/m_dm
-        # print('PBH norm=', norm)
-        N = norm*N
+        norm_MW = vol / MW_vol
+        print('PBH norm,total nlens=', norm, sum(norm*N))
+        print('Milkyway norm, total nlens=', norm_MW, sum(norm_MW*N))
+        # N = norm*N
         #print(m_dm, N)
         nlens= sum(N)
         ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
         c = Counter(ran_samp)
         nl = [c[m_l] for m_l in self.m_l]
+        # print('nl,',nl)
         self.n_l = np.random.poisson(nl)
 
         if sum(self.n_l) == 0:
             self.n_l[random.randint(0,len(self.n_l)-1)] = 1
-
-        #print(self.n_l)
 
     def __post_init__(self):
         self.calc()

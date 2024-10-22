@@ -100,17 +100,22 @@ def alphal_vec(Ml, bvec, vvec, vdotvec = None):
     ## Put it all together, make each term unitless
     # print(type(Ml),np.size(Ml))
     if np.size(Ml) > 1:
-        # print('here', type(Ml[0]))
         # Term1, Term2, Term3 = 0,0,0
+        # total_m = 0
         # for m in Ml:
         #     Term1 += m.M(b)[:, np.newaxis] * Aterm #FIXME Loop over all Ml (add them all?)
         #     Term2 += (m.Mprime(b) * b)[:, np.newaxis] * Bterm
         #     Term3 += (m.Mpprime(b) * b**2)[:, np.newaxis] * Cterm
+        #     total_m+=np.max(m.M(b))
+        # print('total_m',total_m)
         t1_list, t2_list, t3_list = [], [], []
+        total_m = 0
         for m, bi in zip(Ml, b):
             t1_list.append(m.M(bi).value)
             t2_list.append(m.Mprime(bi).value)
             t3_list.append(m.Mpprime(bi).value)
+            total_m += m.M(bi)
+        print('total_m', total_m)
         t1_list = np.array(t1_list) * u.Msun
         t2_list = np.array(t2_list) * (u.Msun / u.kpc)
         t3_list = np.array(t3_list) * (u.Msun / u.kpc**2)

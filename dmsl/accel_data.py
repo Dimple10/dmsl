@@ -63,6 +63,7 @@ class AccelData():
 
     def lnlike(self,pars,survey,nstars,mptype,mftype):
         #print(np.shape(bb))
+        self.survey=survey
         self.alphal = self.samplealphal(pars,survey,nstars,mptype=mptype,mftype=mftype)
         #FIXME
         # if self.massprofile.type == 'ps':
@@ -87,6 +88,7 @@ class AccelData():
         rv = gsh.initialize_dist(target=survey.target,
                                  rmax=survey.maxdlens.to(u.kpc).value)
         self.rdist = rv
+        self.survey = survey
         #print('stars',nstars)
         self.bs = np.logspace(-8, np.log10(np.sqrt(2)*survey.fov_rad),nstars)
         #print('bs min',np.min(self.bs))
@@ -154,7 +156,7 @@ class AccelData():
         if mftype == 'PowerLaw':
             logalpha = pars[i+0]
             logM0 = pars[i+1]
-            newmf = mf.PowerLaw(m_l=mft.m_l,logM_0=logM0, logalpha=logalpha)
+            newmf = mf.PowerLaw(m_l=mft.m_l,logM_0=logM0, logalpha=logalpha,sur=self.survey)
         elif mftype == 'Tinker':
             # A = pars[i+0]
             a = pars[i+0]
@@ -163,16 +165,16 @@ class AccelData():
             #k_b = pars[i+4]
             #n_b = pars[i+5]
             #k_s = pars[i+6]
-            newmf = mf.Tinker(m_l=mft.m_l, a= a, b= b, c= c)#, k_b=k_b, n_b=n_b, k_s=k_s)
+            newmf = mf.Tinker(m_l=mft.m_l, a= a, b= b, c= c,sur=self.survey)#, k_b=k_b, n_b=n_b, k_s=k_s)
         elif mftype == 'CDM':
             # loga = pars[i+0]
             b = pars[i+0]
             logc = pars[i+1]
-            newmf = mf.CDM_Test(m_l=mft.m_l, b = b,logc = logc)
+            newmf = mf.CDM_Test(m_l=mft.m_l, b = b,logc = logc,sur=self.survey)
         elif mftype == 'WDM Lensing':
             mwdm = pars[i+0]
             beta = pars[i+1]
-            newmf = mf.WDM_lensing(m_l=mft.m_l,mwdm=mwdm, beta=beta)
+            newmf = mf.WDM_lensing(m_l=mft.m_l,mwdm=mwdm, beta=beta,sur=self.survey)
         elif mftype == 'WDM Stream':
             logmwdm = pars[i+0]
             gamma = pars[i+1]
@@ -180,13 +182,13 @@ class AccelData():
             # loga_cdm = pars[i+3]
             # b_cdm = pars[i+4]
             # logc_cdm =pars[i+5]
-            newmf = mf.WDM_stream(m_l=mft.m_l,logmwdm=logmwdm,gamma=gamma, beta=beta)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
+            newmf = mf.WDM_stream(m_l=mft.m_l,logmwdm=logmwdm,gamma=gamma, beta=beta,sur=self.survey)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
         elif mftype == 'Press Schechter':
             del_crit = pars[i+0]
-            newmf = mf.PressSchechter_test(m_l=mft.m_l,del_crit = del_crit)
+            newmf = mf.PressSchechter_test(m_l=mft.m_l,del_crit = del_crit,sur=self.survey)
         elif mftype == 'PBH':
             logf_pbh = pars[i+0]
-            newmf = mf.PBH(m_l=mft.m_l,logf_pbh = logf_pbh)
+            newmf = mf.PBH(m_l=mft.m_l,logf_pbh = logf_pbh,sur=self.survey)
         else:
            raise NotImplementedError("""Need to add this mass function to
            sampler.""")
