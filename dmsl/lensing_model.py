@@ -17,7 +17,7 @@ def alphal(Ml, bvec, vvec):
     vvvec must be in length / unit time units -- if not a Quantity, will be
     assumed to be in km/s.
     '''
-    # print('In lensing model')
+    # print('In lensing model 5')
     #start1 = time.perf_counter()
     if isinstance(bvec, u.Quantity) == False:
         bvec *= u.kpc
@@ -115,7 +115,7 @@ def alphal_vec(Ml, bvec, vvec, vdotvec = None):
             t2_list.append(m.Mprime(bi).value)
             t3_list.append(m.Mpprime(bi).value)
             total_m += m.M(bi)
-        print('total_m', total_m)
+        # print('total_m', total_m)
         t1_list = np.array(t1_list) * u.Msun
         t2_list = np.array(t2_list) * (u.Msun / u.kpc)
         t3_list = np.array(t3_list) * (u.Msun / u.kpc**2)

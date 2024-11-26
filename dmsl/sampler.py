@@ -140,9 +140,9 @@ class Sampler():
         old_tau = np.inf
         # Now we'll sample for up to max_n steps
         print("Sampling..")
-        ctr = 0
+        # ctr = 0
         # start = time()
-        #sampler.run_mcmc(p0, max_n, progress=True)
+        # sampler.run_mcmc(p0, max_n, progress=True)
         # for sample in sampler.sample(p0, iterations=max_n, progress=True):
         #     # Only check convergence every 100 steps
         #     if sampler.iteration % 100:
@@ -167,13 +167,14 @@ class Sampler():
         # print("Serial took {0:.1f} seconds".format(serial_time))
         # print("Sampling..")
         with Pool() as pool:
+            # print('Inside pool')
             sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike, pool=pool)
             start = time()
             sampler.run_mcmc(p0, max_n, progress=True)
             end = time()
             multi_time = end - start
             print("Multiprocessing took {0:.1f} seconds".format(multi_time))
-            #print("{0:.1f} times faster than serial".format(serial_time / multi_time))
+        #     #print("{0:.1f} times faster than serial".format(serial_time / multi_time))
         ## run sampler
         #print("Sampling..")
         #sampler.run_mcmc(p0, self.ntune+self.nsamples, progress=True)
@@ -288,7 +289,7 @@ class Sampler():
 
     def samplealphal(self, pars):
         ## Samples p(alpha_l | M_l)
-        #print('In samplealpha')
+        # print('In samplealpha 2')
         if self.usefraction:
             f = pars[-1]
         else:
@@ -304,18 +305,21 @@ class Sampler():
         else:
             newmp, newmassfunction = self.make_new_mass(pars)
             nlens = np.ceil(f*newmassfunction.n_l)
+            # print('total lens:',sum(nlens))
             if sum(nlens) ==0:
-                print('no lens in sampler 2')
+                # print('no lens in sampler 2')
                 nlens[0] = 1
             priorpdf = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
                 n=sum(nlens))
             if np.size(newmp) > 1:
+                # print('More than 1 mp, pars: ', pars)
                 mp_indices = np.random.randint(0, len(newmp), self.nstars)
                 newmassprofile = [newmp[i] for i in mp_indices]
             else:
                 newmassprofile = newmp
         #print(priorpdf, self.bs, sum(nlens))
         if np.any(np.isnan(priorpdf)):
+            # print('First nan check samplealpha')
             return -np.inf
 
         priorpdfspline = UnivariateSpline(np.log10(self.bs[priorpdf>0]),
@@ -375,7 +379,9 @@ class Sampler():
         return alphal
 
     def lnlike(self,pars):
+        # print('In lnlike 1')
         if ~np.isfinite(self.logprior(pars)):
+            # print('First nan check lnlike')
             return -np.inf
         alphal = self.samplealphal(pars)
         #FIXME
@@ -383,13 +389,16 @@ class Sampler():
             # if ps, need to do snr check and re-sample if any have too high snr. this stops walkers from getting too stuck.
              alphal = self.snr_check(alphal, pars)
              if alphal == "error":
+                 # print('snr nan check lnlike')
                  return -np.inf
         if np.any(np.isnan(alphal)): #FIXME Should not be needed!
+            # print('Second nan check lnlike')
             return -np.inf
         try:
             #print('Trying')
             diff = alphal.value - self.data
         except:
+            # print('Third nan check lnlike')
             return -np.inf
         chisq = -0.5 * np.sum((diff)**2 / self.survey.alphasigma.value**2 -np.log(2 * np.pi * self.survey.alphasigma.value**2))
         self.chisq.append([pars,chisq]) #specific to 1 par case
@@ -482,7 +491,7 @@ class Sampler():
         return flatchain, loglike
 
     def make_new_mass(self,pars):
-        #print('In make new mass')
+        # print('In make new mass 3')
         mptype = self.massprofile.type
         kwargs = self.massprofile.kwargs
         i = 1
