@@ -34,7 +34,7 @@ import dmsl.lensing_model as lm
 import dmsl.mass_profile as mp
 import dmsl.mass_function as mf
 from multiprocessing import Pool
-from time import *
+import time
 RHO_DM = gsh.density(8.*u.kpc)
 
 
@@ -169,9 +169,9 @@ class Sampler():
         with Pool() as pool:
             # print('Inside pool')
             sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike, pool=pool)
-            start = time()
+            start = time.time()
             sampler.run_mcmc(p0, max_n, progress=True)
-            end = time()
+            end = time.time()
             multi_time = end - start
             print("Multiprocessing took {0:.1f} seconds".format(multi_time))
         #     #print("{0:.1f} times faster than serial".format(serial_time / multi_time))
@@ -290,6 +290,7 @@ class Sampler():
     def samplealphal(self, pars):
         ## Samples p(alpha_l | M_l)
         # print('In samplealpha 2')
+        # start = time.perf_counter()
         if self.usefraction:
             f = pars[-1]
         else:
@@ -303,7 +304,10 @@ class Sampler():
             priorpdf = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
                            n=nlens)
         else:
+            start2 = time.perf_counter()
             newmp, newmassfunction = self.make_new_mass(pars)
+            end2 = time.perf_counter()
+            print(f'Time taken for makenewmass: {(end2 - start2):.6f} second')
             nlens = np.ceil(f*newmassfunction.n_l)
             # print('total lens:',sum(nlens))
             if sum(nlens) ==0:
@@ -311,6 +315,7 @@ class Sampler():
                 nlens[0] = 1
             priorpdf = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
                 n=sum(nlens))
+            # print('Successfully called priorpdf without overflow errors')
             if np.size(newmp) > 1:
                 # print('More than 1 mp, pars: ', pars)
                 mp_indices = np.random.randint(0, len(newmp), self.nstars)
@@ -322,6 +327,7 @@ class Sampler():
             # print('First nan check samplealpha')
             return -np.inf
 
+        # start3 =time.perf_counter()
         priorpdfspline = UnivariateSpline(np.log10(self.bs[priorpdf>0]),
                 np.log10(priorpdf[priorpdf>0]), ext='zeros', s=0)
         dists = self.rdist.rvs(self.nstars) * u.kpc
@@ -329,6 +335,9 @@ class Sampler():
         y = 10**priorpdfspline(np.log10(self.bs))
         sci_s = scipy.interpolate.interp1d(x, y, fill_value='extrapolate')
         sci = sci_s(x)
+        if np.any(np.isnan(sci)):
+            # print('impact param interpolation sci has nan')
+            return -np.inf
         temp = np.random.choice(x, self.nstars, p=sci / sum(sci)) #* dists
         self.beff_avg.append(np.average(temp))
         beff = 10**(np.ones(temp.shape)*np.average(temp)) * dists
@@ -352,12 +361,15 @@ class Sampler():
         bvec *= u.kpc
         vvec *= u.km / u.s
         ## get alphal given sampled other params.
-
+        # end3 = time.perf_counter()
+        # print(f'Time taken for beff + middle in samplealpha: {(end3 - start3):.6f} second')
         alphal = lm.alphal(newmassprofile, bvec, vvec)
         #print('Outside lensing model')
         ## if only sampling in 1D, get magnitude of vec.
         if self.ndims == 1:
             alphal = np.linalg.norm(alphal, axis=1)
+        # end = time.perf_counter()
+        # print(f'Time taken for samplealpha: {(end-start):.6f} second')
         return alphal
 
     def snr_check(self, alphal0, pars, maxiter=100): #FIXME handle array as alphal0 -- only for ps
@@ -380,6 +392,7 @@ class Sampler():
 
     def lnlike(self,pars):
         # print('In lnlike 1')
+        # start = time.perf_counter()
         if ~np.isfinite(self.logprior(pars)):
             # print('First nan check lnlike')
             return -np.inf
@@ -402,6 +415,8 @@ class Sampler():
             return -np.inf
         chisq = -0.5 * np.sum((diff)**2 / self.survey.alphasigma.value**2 -np.log(2 * np.pi * self.survey.alphasigma.value**2))
         self.chisq.append([pars,chisq]) #specific to 1 par case
+        # end = time.perf_counter()
+        # print(f'Time taken for lnlike: {(end-start):.6f} second')
         return chisq
 
     def lnlike_noise(self,pars):
@@ -512,11 +527,11 @@ class Sampler():
                 #k_s = pars[i+6]
                 newmf = mf.Tinker(m_l=self.massfunction.m_l,a= a, b= b, c= c,sur=self.survey)#, k_b=k_b, n_b=n_b, k_s=k_s)
             elif mftype == 'CDM':
-                #loga = pars[i+0]
-                b = pars[i+0]
-                logc = pars[i+1]
+                loga = pars[i+0]
+                b = pars[i+1]
+                logc = pars[i+2]
                 #print('before CDM makenewmass')
-                newmf = mf.CDM_Test(m_l=self.massfunction.m_l, b = b,logc = logc,sur=self.survey)
+                newmf = mf.CDM_Test(m_l=self.massfunction.m_l, loga=loga, b = b,logc = logc,sur=self.survey)
                 #print('after CDM makenewmass')
             elif mftype == 'WDM Stream':
                 logmwdm = pars[i+0]
@@ -546,6 +561,7 @@ class Sampler():
               #  sampler.""")
             newmp = []
             n_lens = sum(newmf.n_l.astype(int))
+            # start = time.perf_counter()
             if mptype == 'ps':
                 if n_lens == 1:
                     index = np.nonzero(newmf.n_l.astype(int))
@@ -582,10 +598,13 @@ class Sampler():
                     newmp = mp.NFW(**kwargs)
                 else:
                     #print(newmf.n_l)
+                    # start3 = time.perf_counter()
                     for ind123, (newmf_ml, num_lenses) in enumerate(zip(newmf.m_l, newmf.n_l.astype(int))):
                         #print(ind123)
                         kwargs['Ml'] = newmf_ml * u.Msun
                         newmp.extend([mp.NFW(**kwargs) for _ in range(num_lenses)])
+                    # end3 = time.perf_counter()
+                    # print(f'Time taken for total nfw loop: {(end3 - start3):.6f} second')
                     if len(newmp) == 0: ##Case where there are no lens, assume 1 exists in the lowest mass bin
                         kwargs['Ml'] = int(newmf.m_l[0]) * u.Msun
                         newmp = mp.NFW(**kwargs)
@@ -593,8 +612,8 @@ class Sampler():
             else:
                 raise NotImplementedError("""Need to add this mass profile/mass function to
                 sampler.""")
-            # print(type(newmp[0]), np.size(newmp))
-            #print('done w makenewmass')
+            # end = time.perf_counter()
+            # print(f'Time taken for make new mass loop: {(end - start):.6f} second')
             return newmp, newmf #Array of mp
         else:
             if mptype == 'ps':

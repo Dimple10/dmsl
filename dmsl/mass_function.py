@@ -90,16 +90,16 @@ class PowerLaw(MassFunction):
 class Tinker(MassFunction):
     Name: str = 'Tinker'
     m_l: list = field(default_factory=lambda: np.logspace(4, 12, 7))
-    den_n_l: list = field(default_factory=lambda: np.zeros(1000))
-    n_l: list = field(default_factory=lambda: np.zeros(1000))
+    den_n_l: list = field(default_factory=lambda: np.zeros(100))
+    n_l: list = field(default_factory=lambda: np.zeros(100))
     A: float = 0.260  #FIXME Used values from colossus (https://bitbucket.org/bdiemer/colossus/src/master/colossus/lss/mass_function.py)
     a: float = 2.66 #power
     b: float = 1.41
     c: float = 2.44 #power
-    sig: list = field(default_factory=lambda: [1 for i in range(1000)])
-    der: list = field(default_factory=lambda: [1 for i in range(1000)])
-    R: list = field(default_factory=lambda: [1 for i in range(1000)])
-    f: list = field(default_factory=lambda: [1 for i in range(1000)])
+    sig: list = field(default_factory=lambda: [1 for i in range(100)])
+    der: list = field(default_factory=lambda: [1 for i in range(100)])
+    R: list = field(default_factory=lambda: [1 for i in range(100)])
+    f: list = field(default_factory=lambda: [1 for i in range(100)])
     A_s: float = 2.105 * 10 ** -9
     n_s: float = 0.9665
     k_b: float = 13 * (1 / u.Mpc)  # Units of Mpc^-1
@@ -203,7 +203,7 @@ class Tinker(MassFunction):
         # self.den_n_l *= MW_vol.value
         #Calculating the normalization
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
-        self.den_n_l *= (vol / MW_vol).value * 207.71
+        self.den_n_l *= (vol / MW_vol).value * 76.66
 
         integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
         integr = np.insert(integr, 0, 0)
@@ -347,15 +347,16 @@ class CDM_Test(MassFunction):
         # print('vol=',vol)
         ##For Roman vol Only
         ## Since its dN/dM, dividing by MW vol and multiplying by roman vol
-        # self.den_n_l *= (vol/MW_vol).value *207.71 #  76.66#Correction factor w/ avg density in roman vs MW
+        self.den_n_l *= (vol/MW_vol).value *76.66#Correction factor w/ avg density in roman vs MW
         #Should be in Mpc but converting both to Mpc will cancel out
         # print((vol/MW_vol).value)
 
         self.integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
+        nlens = self.integr[-1]
         # print('Last in cumulative trapz:', self.integr[-1])
-        self.integr = np.insert(self.integr,0,0)
+        # self.integr = np.insert(self.integr,0,0)
         # print('integr + size:', integr, np.size(integr))
-        self.N = np.array(np.diff(self.integr,prepend=0))
+        # self.N = np.array(np.diff(self.integr,prepend=0))
         # print('N tot before norm', sum(N))
         # m_dm = np.sum(self.N * self.m_l) * u.Msun
         # m_sur = Rho_dm * vol
@@ -364,9 +365,9 @@ class CDM_Test(MassFunction):
         # print('CDM norm=',norm)
         # N = norm*N
         # print('N after norm=', sum(N))
-        nlens= sum(self.N)/10**5 #Lowered by 10**5 only for MW volume Lowered for WDM_stream calc coz irrelevant!
-        # if nlens>1:
-            # print('nlens>1 in CDM,', int(nlens))
+        # nlens= sum(self.N)#/10**5 #Lowered by 10**5 only for MW volume Lowered for WDM_stream calc coz irrelevant!
+        # if nlens>1000:
+        #     print('nlens>1000 in CDM,', int(nlens))
         # print('nlens,norm',nlens,norm)
         ran_samp = np.random.choice(self.m_l, int(nlens), p=self.den_n_l / sum(self.den_n_l))
         c = Counter(ran_samp)
