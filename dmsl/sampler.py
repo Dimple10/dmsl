@@ -304,24 +304,26 @@ class Sampler():
             priorpdf = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
                            n=nlens)
         else:
-            start2 = time.perf_counter()
-            newmp, newmassfunction = self.make_new_mass(pars)
-            end2 = time.perf_counter()
-            print(f'Time taken for makenewmass: {(end2 - start2):.6f} second')
+            # start2 = time.perf_counter()
+            newmassprofile, newmassfunction = self.make_new_mass(pars)
+            # end2 = time.perf_counter()
+            # print(f'Time taken for makenewmass: {(end2 - start2):.6f} second')
             nlens = np.ceil(f*newmassfunction.n_l)
             # print('total lens:',sum(nlens))
-            if sum(nlens) ==0:
-                # print('no lens in sampler 2')
-                nlens[0] = 1
+            # if sum(nlens) ==0:
+            #     # print('no lens in sampler 2')
+            #     nlens[0] = 1
             priorpdf = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
                 n=sum(nlens))
             # print('Successfully called priorpdf without overflow errors')
-            if np.size(newmp) > 1:
-                # print('More than 1 mp, pars: ', pars)
-                mp_indices = np.random.randint(0, len(newmp), self.nstars)
-                newmassprofile = [newmp[i] for i in mp_indices]
-            else:
-                newmassprofile = newmp
+
+            # if np.size(newmp) > 1:
+            #     # print('More than 1 mp, pars: ', pars)
+            #     mp_indices = np.random.randint(0, len(newmp), self.nstars)
+            #     newmassprofile = [newmp[i] for i in mp_indices]
+            # else:
+            #     newmassprofile = newmp
+
         #print(priorpdf, self.bs, sum(nlens))
         if np.any(np.isnan(priorpdf)):
             # print('First nan check samplealpha')
@@ -527,11 +529,11 @@ class Sampler():
                 #k_s = pars[i+6]
                 newmf = mf.Tinker(m_l=self.massfunction.m_l,a= a, b= b, c= c,sur=self.survey)#, k_b=k_b, n_b=n_b, k_s=k_s)
             elif mftype == 'CDM':
-                loga = pars[i+0]
-                b = pars[i+1]
-                logc = pars[i+2]
+                # loga = pars[i+0]
+                b = pars[i+0]
+                logc = pars[i+1]
                 #print('before CDM makenewmass')
-                newmf = mf.CDM_Test(m_l=self.massfunction.m_l, loga=loga, b = b,logc = logc,sur=self.survey)
+                newmf = mf.CDM_Test(m_l=self.massfunction.m_l, b = b,logc = logc,sur=self.survey)
                 #print('after CDM makenewmass')
             elif mftype == 'WDM Stream':
                 logmwdm = pars[i+0]
@@ -560,21 +562,25 @@ class Sampler():
              #   raise NotImplementedError("""Need to add this mass function to
               #  sampler.""")
             newmp = []
-            n_lens = sum(newmf.n_l.astype(int))
+            n_lens = sum(newmf.n_l)
             # start = time.perf_counter()
+            if n_lens>1:
+                nonzero = np.nonzero(newmf.n_l)
+                sampling_pool = np.repeat(nonzero, newmf.n_l[nonzero])
+                ran_samp = np.random.choice(sampling_pool, self.nstars, replace=True)
+
             if mptype == 'ps':
                 if n_lens == 1:
                     index = np.nonzero(newmf.n_l.astype(int))
                     kwargs['Ml'] = int(newmf.m_l[index[0]]) * u.Msun
                     newmp = mp.PointSource(**kwargs)
                 else:
-                    for newmf_ml, num_lenses in zip(newmf.m_l, newmf.n_l.astype(int)):
-                        kwargs['Ml'] = newmf_ml*u.Msun
-                        newmp.extend([mp.PointSource(**kwargs)for _ in range(num_lenses)])
-                    if len(newmp) == 0:
-                        print('no lens makenewmass')
-                        kwargs['Ml'] = int(newmf.m_l[0]) * u.Msun
-                        newmp = mp.PointSource(**kwargs)
+                    for index in ran_samp:
+                        kwargs['Ml'] = newmf.m_l[index] * u.Msun
+                        newmp.extend([mp.PointSource(**kwargs)])
+                    # for newmf_ml, num_lenses in zip(newmf.m_l, newmf.n_l.astype(int)):
+                    #     kwargs['Ml'] = newmf_ml*u.Msun
+                    #     newmp.extend([mp.PointSource(**kwargs)for _ in range(num_lenses)])
 
             elif mptype == 'gaussian':
                 kwargs['R0'] = 10**pars[0]*u.pc
@@ -583,12 +589,13 @@ class Sampler():
                     kwargs['Ml'] = newmf.m_l[index[0]] * u.Msun
                     newmp = mp.Gaussian(**kwargs)
                 else:
-                    for newmf_ml, num_lenses in zip(newmf.m_l, newmf.n_l):
-                        kwargs['Ml'] = newmf_ml * u.Msun
-                        newmp.extend([mp.Gaussian(**kwargs) for _ in range(num_lenses)])
-                    if len(newmp) == 0:
-                        kwargs['Ml'] = newmf.m_l[0] * u.Msun
-                        newmp = mp.Gaussian(**kwargs)
+                    for index in ran_samp:
+                        kwargs['Ml'] = newmf.m_l[index] * u.Msun
+                        newmp.extend([mp.Gaussian(**kwargs)])
+                    # for newmf_ml, num_lenses in zip(newmf.m_l, newmf.n_l):
+                    #     kwargs['Ml'] = newmf_ml * u.Msun
+                    #     newmp.extend([mp.Gaussian(**kwargs) for _ in range(num_lenses)])
+
             elif mptype == 'nfw':
                 kwargs['c200'] = 10**pars[0]
                 #print('in nfw makenewmass')
@@ -597,18 +604,16 @@ class Sampler():
                     kwargs['Ml'] = int(newmf.m_l[index[0]]) * u.Msun
                     newmp = mp.NFW(**kwargs)
                 else:
+                    for index in ran_samp:
+                        kwargs['Ml'] = newmf.m_l[index] * u.Msun
+                        newmp.extend([mp.NFW(**kwargs)])
                     #print(newmf.n_l)
                     # start3 = time.perf_counter()
-                    for ind123, (newmf_ml, num_lenses) in enumerate(zip(newmf.m_l, newmf.n_l.astype(int))):
-                        #print(ind123)
-                        kwargs['Ml'] = newmf_ml * u.Msun
-                        newmp.extend([mp.NFW(**kwargs) for _ in range(num_lenses)])
+                    # for ind123, (newmf_ml, num_lenses) in enumerate(zip(newmf.m_l, newmf.n_l.astype(int))):
+                    #     kwargs['Ml'] = newmf_ml * u.Msun
+                    #     newmp.extend([mp.NFW(**kwargs) for _ in range(num_lenses)])
                     # end3 = time.perf_counter()
                     # print(f'Time taken for total nfw loop: {(end3 - start3):.6f} second')
-                    if len(newmp) == 0: ##Case where there are no lens, assume 1 exists in the lowest mass bin
-                        kwargs['Ml'] = int(newmf.m_l[0]) * u.Msun
-                        newmp = mp.NFW(**kwargs)
-
             else:
                 raise NotImplementedError("""Need to add this mass profile/mass function to
                 sampler.""")

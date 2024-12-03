@@ -335,9 +335,9 @@ class CDM_Test(MassFunction):
     loga: float = np.log10(3.26 * 10 ** -5)
     b: float = -1.9
     logc: float = np.log10(2.57 * 10 ** 7)
-    nparams: int = 3
-    param_names: list = field(default_factory=lambda: ['loga','b', 'logc'])
-    param_range: dict = field(default_factory=lambda: {'loga':(-8, -2),'b': (-3, -1), 'logc': (6, 8)})
+    nparams: int = 2
+    param_names: list = field(default_factory=lambda: ['b', 'logc'])
+    param_range: dict = field(default_factory=lambda: {'b': (-2.5, -1), 'logc': (6, 8)})
 
     def find_Nl(self):
         self.den_n_l = (10 ** self.loga) * ((self.m_l / (10 ** self.logc)) ** self.b)  ##Units of M_sun^-1
