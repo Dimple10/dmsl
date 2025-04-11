@@ -102,13 +102,13 @@ class Tinker(MassFunction):
     f: list = field(default_factory=lambda: [1 for i in range(100)])
     A_s: float = 2.105 * 10 ** -9
     n_s: float = 0.9665
-    k_b: float = 13 * (1 / u.Mpc)  # Units of Mpc^-1
+    logk_b: float = np.log10(13) * (1 / u.Mpc)  # Units of Mpc^-1
     n_b: float = 2.0  # or 3.0 (Fig #7 in Power of Halometry)
     k_s: float = 0.05 * (1 / u.Mpc)  # Units of Mpc^-1
     #cosmo:astropy.cosmology.Cosmology() = cosmo
-    nparams: int = 3
-    param_names: list = field(default_factory=lambda:['a', 'b', 'c'])#, 'k_b', 'n_b', 'k_s'])
-    param_range: dict = field(default_factory=lambda:{ 'a': (1.8, 5), 'b':(0.001, 100), 'c':(1.8, 5)})#, 'k_b':(1,100),'n_b':(1,5), 'k_s':(0,1)})
+    nparams: int = 2
+    param_names: list = field(default_factory=lambda:['logk_b', 'n_b'])#, 'k_s'])#['a', 'b', 'c'])
+    param_range: dict = field(default_factory=lambda:{'logk_b': (-2,2), 'n_b':(1,4)}) #{ 'a': (1.8, 5), 'b':(0.001, 100), 'c':(1.8, 5)})
 
     def getPk(self):
         #start=time.time()
@@ -126,9 +126,9 @@ class Tinker(MassFunction):
         return self.F
 
     def phi(self,k):
-        return np.piecewise(k, [k<self.k_b*u.Mpc, k>=self.k_b*u.Mpc],
+        return np.piecewise(k, [k<10**self.logk_b*u.Mpc, k>=10**self.logk_b*u.Mpc],
                [lambda k:self.A_s * (k / (u.Mpc * self.k_s)) ** (self.n_s - 1),
-                lambda k:self.A_s * (self.k_b / self.k_s) ** (self.n_s - 1) * (k / (u.Mpc * self.k_b)) ** (self.n_b - 1)])
+                lambda k:self.A_s * (10**self.logk_b / self.k_s) ** (self.n_s - 1) * (k / (u.Mpc * 10**self.logk_b)) ** (self.n_b - 1)])
 
     def calc_f(self):
         self.f = (self.A * ((np.array(self.sig) / self.b) ** (-1 * self.a) + 1)) * np.exp(
@@ -203,11 +203,13 @@ class Tinker(MassFunction):
         # self.den_n_l *= MW_vol.value
         #Calculating the normalization
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
-        self.den_n_l *= (vol / MW_vol).value * 76.66
-
-        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
-        integr = np.insert(integr, 0, 0)
-        N = np.diff(integr, prepend=0)
+        correction = (vol / MW_vol).value * 76.66
+        # self.den_n_l *= (vol.to(u.Mpc**3)).value * 76.66
+        # print((vol.to(u.Mpc**3)).value)
+        integr = scipy.integrate.cumulative_trapezoid((self.den_n_l*correction), self.m_l)
+        nlens = integr[-1]
+        # integr = np.insert(integr, 0, 0)
+        # N = np.diff(integr, prepend=0)
         # This is dn/dM not dN/dM as everything else so multiplying by vol already!
         # N *= vol.value
         # N *=MW_vol.to(u.Mpc**3).value
@@ -217,8 +219,8 @@ class Tinker(MassFunction):
         # print('Tinker norm=', norm)
         # norm = vol/MW_vol
         # N = norm * N
-        nlens = sum(N)#/10**5
-        print('lens',nlens)
+        # nlens = sum(N)#/10**5
+        # print('lens',nlens)
         ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
         c = Counter(ran_samp)
         nl = [c[m_l] for m_l in self.m_l]
@@ -329,9 +331,9 @@ class LCDM_Tinker(MassFunction):
 @dataclass
 class CDM_Test(MassFunction):
     Name: str = 'CDM'
-    m_l: list = field(default_factory=lambda: np.logspace(0, 2, 10))
-    den_n_l: list = field(default_factory=lambda: np.zeros((10)))
-    n_l: list = field(default_factory=lambda: np.zeros((10)))
+    m_l: list = field(default_factory=lambda: np.logspace(0, 2, 100))
+    den_n_l: list = field(default_factory=lambda: np.zeros((100)))
+    n_l: list = field(default_factory=lambda: np.zeros((100)))
     loga: float = np.log10(3.26 * 10 ** -5)
     b: float = -1.9
     logc: float = np.log10(2.57 * 10 ** 7)
@@ -347,12 +349,13 @@ class CDM_Test(MassFunction):
         # print('vol=',vol)
         ##For Roman vol Only
         ## Since its dN/dM, dividing by MW vol and multiplying by roman vol
-        self.den_n_l *= (vol/MW_vol).value *76.66#Correction factor w/ avg density in roman vs MW
+        correction= (vol/MW_vol).value *76.66#Correction factor w/ avg density in roman vs MW
         #Should be in Mpc but converting both to Mpc will cancel out
         # print((vol/MW_vol).value)
 
-        self.integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
+        self.integr = scipy.integrate.cumulative_trapezoid((self.den_n_l*correction), self.m_l)
         nlens = self.integr[-1]
+        print(correction)
         # print('Last in cumulative trapz:', self.integr[-1])
         # self.integr = np.insert(self.integr,0,0)
         # print('integr + size:', integr, np.size(integr))
@@ -366,6 +369,7 @@ class CDM_Test(MassFunction):
         # N = norm*N
         # print('N after norm=', sum(N))
         # nlens= sum(self.N)#/10**5 #Lowered by 10**5 only for MW volume Lowered for WDM_stream calc coz irrelevant!
+        # print('nlens',nlens)
         # if nlens>1000:
         #     print('nlens>1000 in CDM,', int(nlens))
         # print('nlens,norm',nlens,norm)
@@ -410,16 +414,16 @@ class WDM_stream(MassFunction):
 
     def find_Nl(self):
         cdm = CDM_Test(m_l=self.m_l, sur=self.sur)#, loga=self.loga_cdm, b=self.b_cdm, logc=self.logc_cdm) #return dN/dM, we need dN/dlnM
-        cdm_den_nl = cdm.den_n_l * cdm.m_l
+        cdm_den_nl = cdm.den_n_l * cdm.m_l #CDM dn/dm without correction
         #print('cdm den:',cdm_den_nl)
         self.den_n_l = (1 + self.gamma*self.M_hm/self.m_l)**(-1*self.beta) * cdm_den_nl
         #Convert from dN/dlnM to dN/dM--
         self.den_n_l = self.den_n_l / self.m_l
 
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
-        self.den_n_l *= (vol / MW_vol).value * 76.66 ##Accounting for Roman vol with density correction!
+        correction= (vol / MW_vol).value * 76.66 ##Accounting for Roman vol with density correction!
 
-        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
+        integr = scipy.integrate.cumulative_trapezoid((self.den_n_l*correction), self.m_l)
         integr = np.insert(integr, 0, 0)
         N = np.diff(integr, prepend=0)
         # m_dm = np.sum(N * self.m_l) * u.Msun
@@ -428,7 +432,7 @@ class WDM_stream(MassFunction):
         # norm = vol / MW_vol
         # print('WDM norm=', norm)
         # N = norm * N
-        nlens = sum(N)
+        nlens = sum(N)#/10**5
         # print('nlens WDM',nlens)
         ran_samp = np.random.choice(self.m_l, int(nlens), p=self.den_n_l / sum(self.den_n_l))
         c = Counter(ran_samp)

@@ -436,9 +436,9 @@ class Sampler():
 
     def load_data(self):
         print('Creating data vector')
-        if False: #Switch to if statement below for CDM as null hypothesis for WDM
-        #if (self.massfunction.Name == 'WDM Stream' or self.massfunction.Name == 'WDM Lensing'):
-            print('inside WDM') #FIXME
+        #if False: #Switch to if statement below for CDM as null hypothesis for WDM
+        if (self.massfunction.Name == 'WDM Stream' or self.massfunction.Name == 'WDM Lensing'):
+            # print('inside WDM') #FIXME
             self.data = AccelData(self.survey, nstars=self.nstars,
                 ndims=self.ndims,wdm=True).data.to_numpy()
         else:
@@ -521,13 +521,13 @@ class Sampler():
                 logM0 = pars[i+1]
                 newmf = mf.PowerLaw(m_l=self.massfunction.m_l,logM_0=logM0, logalpha=logalpha,sur=self.survey)
             elif mftype == 'Tinker':
-                a = pars[i+0]
-                b = pars[i+1]
-                c = pars[i+2]
-                #k_b = pars[i+4]
-                #n_b = pars[i+5]
+                # a = pars[i+0]
+                # b = pars[i+1]
+                # c = pars[i+2]
+                logk_b = pars[i+0]
+                n_b = pars[i+1]
                 #k_s = pars[i+6]
-                newmf = mf.Tinker(m_l=self.massfunction.m_l,a= a, b= b, c= c,sur=self.survey)#, k_b=k_b, n_b=n_b, k_s=k_s)
+                newmf = mf.Tinker(m_l=self.massfunction.m_l,logk_b=logk_b,n_b=n_b,sur=self.survey)#, k_b=k_b, n_b=n_b, k_s=k_s)
             elif mftype == 'CDM':
                 # loga = pars[i+0]
                 b = pars[i+0]
