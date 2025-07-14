@@ -29,12 +29,16 @@ class AccelData():
     def __init__(self, survey,nstars=1000, ndims=1, wdm=False):
         rng = np.random.default_rng(seed=seed)
         if wdm:
-            cdm = mf.CDM_Test()
-            nfw = mp.NFW(Ml=1.e5*u.Msun, c200= 13)
-            self.cdm_alphal = self.samplealphal([np.log10(13),np.log10(3.26 * 10 ** -5),-1.9,np.log10(2.57 * 10 ** 7)],
-                                                survey,nstars,mptype=nfw, mftype=cdm)
-            data = pd.DataFrame(self.cdm_alphal.value,columns=['a_x', 'a_y'])
-            print('CDM data type:',type(self.cdm_alphal))
+            # cdm = mf.CDM_Test()
+            # nfw = mp.NFW(Ml=1.e5*u.Msun, c200= 13)
+            # self.cdm_alphal = self.samplealphal([np.log10(13),np.log10(3.26 * 10 ** -5),-1.9,np.log10(2.57 * 10 ** 7)],
+            #                                     survey,nstars,mptype=nfw, mftype=cdm)
+            self.cdm_data = self.mwdm_case(survey, nstars, mass=1e7)
+            # Changing to read previous data file as null hypothesis
+            # path = STARDATADIR + 'Roman_3_2_0_CDMTest.dat'
+            # data = pd.read_csv(path)
+            data = pd.DataFrame(self.cdm_data.value,columns=['a_x', 'a_y'])
+            print('CDM data type:',type(self.cdm_data))
                 #sampler.make_new_mass([2.5,np.log10(3.26 * 10 ** -5),-1.9,np.log10(2.57 * 10 ** 7)], 'CDM','nfw')
         else:
             if ndims == 2:
@@ -90,9 +94,10 @@ class AccelData():
         self.rdist = rv
         self.survey = survey
         #print('stars',nstars)
+        # print('upper bs limit:',np.log10(np.sqrt(2)*survey.fov_rad))
         self.bs = np.logspace(-8, np.log10(np.sqrt(2)*survey.fov_rad),nstars)
         #print('bs min',np.min(self.bs))
-        newmp, newmassfunction = self.make_new_mass(pars,mptype,mftype)
+        newmp, newmassfunction = self.make_new_mass(pars,nstars,mptype,mftype)
         if np.size(newmp) > 1:
             mp_indices=np.random.randint(0, len(newmp), nstars)
             newmassprofile = [newmp[i] for i in mp_indices]
@@ -146,7 +151,7 @@ class AccelData():
         #print(f'Time taken for lensing model: {(end-start):.6f} second')
         return self.alphal
 
-    def make_new_mass(self,pars,mpt,mft): #FIXME For mf does this need to be mf + mp? or just mf?
+    def make_new_mass(self,pars,nstars,mpt,mft): #FIXME For mf does this need to be mf + mp? or just mf?
         mptype = mpt.type
         mftype = mft.Name
         kwargs = mpt.kwargs
@@ -157,15 +162,19 @@ class AccelData():
             logalpha = pars[i+0]
             logM0 = pars[i+1]
             newmf = mf.PowerLaw(m_l=mft.m_l,logM_0=logM0, logalpha=logalpha,sur=self.survey)
+        # elif mftype == 'Tinker':
+        #     # A = pars[i+0]
+        #     a = pars[i+0]
+        #     b = pars[i+1]
+        #     c = pars[i+2]
+        #     #k_b = pars[i+4]
+        #     #n_b = pars[i+5]
+        #     #k_s = pars[i+6]
+        #     newmf = mf.Tinker(m_l=mft.m_l, a= a, b= b, c= c,sur=self.survey)#, k_b=k_b, n_b=n_b, k_s=k_s)
         elif mftype == 'Tinker':
-            # A = pars[i+0]
-            a = pars[i+0]
-            b = pars[i+1]
-            c = pars[i+2]
-            #k_b = pars[i+4]
-            #n_b = pars[i+5]
-            #k_s = pars[i+6]
-            newmf = mf.Tinker(m_l=mft.m_l, a= a, b= b, c= c,sur=self.survey)#, k_b=k_b, n_b=n_b, k_s=k_s)
+            logkb = pars[i+0]*u.Mpc
+            nb = pars[i+1]
+            newmf = mf.Tinker_Mishra(m_l=mft.m_l, logkb=logkb,nb=nb, sur=self.survey)  # , k_b=k_b, n_b=n_b, k_s=k_s)
         elif mftype == 'CDM':
             # loga = pars[i+0]
             b = pars[i+0]
@@ -186,15 +195,23 @@ class AccelData():
         elif mftype == 'Press Schechter':
             del_crit = pars[i+0]
             newmf = mf.PressSchechter_test(m_l=mft.m_l,del_crit = del_crit,sur=self.survey)
+        # elif mftype == 'PBH':
+        #     logf_pbh = pars[i+0]
+        #     newmf = mf.PBH(m_l=mft.m_l,logf_pbh = logf_pbh,sur=self.survey)
         elif mftype == 'PBH':
-            logf_pbh = pars[i+0]
-            newmf = mf.PBH(m_l=mft.m_l,logf_pbh = logf_pbh,sur=self.survey)
+            logmass = pars[i + 0]
+            sigma = pars[i + 1]
+            newmf = mf.PBH_Gaussian(logmass=logmass, sigma=sigma, sur=self.survey)
         else:
            raise NotImplementedError("""Need to add this mass function to
            sampler.""")
 
         newmp = []
         n_lens = sum(newmf.n_l.astype(int))
+        if n_lens > 1:
+            nonzero = np.nonzero(newmf.n_l)
+            sampling_pool = np.repeat(nonzero, newmf.n_l[nonzero])
+            ran_samp = np.random.choice(sampling_pool, nstars, replace=True)
         if mptype == 'ps':
             if n_lens == 1:
                 index = np.nonzero(newmf.n_l.astype(int))
@@ -247,3 +264,56 @@ class AccelData():
             # print(type(newmp[0]), np.size(newmp))
             #print('done w makenewmass')
         return newmp, newmf #Array of mp
+
+    def mwdm_case(self, survey, nstars, mass):
+        rv = gsh.initialize_dist(target=survey.target,
+                                 rmax=survey.maxdlens.to(u.kpc).value)
+        self.rdist = rv
+        self.survey = survey
+        # print('stars',nstars)
+        self.bs = np.logspace(-8, np.log10(np.sqrt(2) * survey.fov_rad), nstars)
+        newmassprofile = []
+        # newmassprofile.extend([mp.NFW(Ml=mass*u.Msun, c200= 13)])
+        # kwargs = mp.NFW.kwargs
+        # newmassprofile = []
+        # if n_lens > 1:
+        # nonzero = np.nonzero(newmf.n_l)
+        # sampling_pool = np.repeat(nlens, newmf.n_l[nlens])
+        # ran_samp = np.random.choice(sampling_pool, self.nstars, replace=True)
+        for i in range(1000):
+            # kwargs['Ml'] = 1e8 * u.Msun
+            newmassprofile.extend([mp.NFW(Ml=mass*u.Msun, c200= 13)])
+            #Needed a 1000 stars to see that one lens at diff b_s values
+
+        priorpdf = pdf(self.bs, a1=survey.fov_rad, a2=survey.fov_rad,
+                       n=1)
+        if np.any(np.isnan(priorpdf)):
+            return -np.inf
+        priorpdfspline = UnivariateSpline(np.log10(self.bs[priorpdf > 0]),
+                                          np.log10(priorpdf[priorpdf > 0]), ext='zeros', s=0)
+        dists = self.rdist.rvs(nstars) * u.kpc
+        x = np.log10(self.bs)
+        y = 10 ** priorpdfspline(np.log10(self.bs))
+        sci_s = scipy.interpolate.interp1d(x, y, fill_value='extrapolate')
+        sci = sci_s(x)
+        if np.any(np.isnan(sci)):
+            # print('impact param interpolation sci has nan')
+            return -np.inf
+        temp = np.random.choice(x, nstars, p=sci / sum(sci))  # * dists
+        # self.beff_avg.append(np.average(temp))
+        beff = 10 ** (np.ones(temp.shape) * np.average(temp)) * dists
+        # beff = 10 ** (temp) * dists
+        vl = scipy.stats.truncnorm.rvs(a=0, b=550. / 220, loc=0., scale=220, size=nstars)
+        bvec = np.zeros((nstars, 2))
+        vvec = np.zeros((nstars, 2))
+        btheta = np.random.rand(nstars) * 2. * np.pi
+        vtheta = np.random.rand(nstars) * 2. * np.pi
+        bvec[:, 0] = beff * np.cos(btheta)
+        bvec[:, 1] = beff * np.sin(btheta)
+        vvec[:, 0] = vl * np.cos(vtheta)
+        vvec[:, 1] = vl * np.sin(vtheta)
+        bvec *= u.kpc
+        vvec *= u.km / u.s
+        # print('shape:', np.shape(newmassprofile))
+        self.alphal = lm.alphal(newmassprofile, bvec, vvec)
+        return self.alphal

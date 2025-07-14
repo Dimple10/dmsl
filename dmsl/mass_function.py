@@ -5,6 +5,7 @@ import astropy.cosmology
 from astropy.cosmology import WMAP7 as cosmo
 import astropy.units as u
 import numpy as np
+import pickle as pkl
 import dmsl.galaxy_subhalo_dist as gsh
 from dataclasses import dataclass,field
 import dmsl.survey as surv
@@ -102,7 +103,7 @@ class Tinker(MassFunction):
     f: list = field(default_factory=lambda: [1 for i in range(100)])
     A_s: float = 2.105 * 10 ** -9
     n_s: float = 0.9665
-    logk_b: float = np.log10(13) * (1 / u.Mpc)  # Units of Mpc^-1
+    logk_b: float = (np.log10(13) * (1 / u.Mpc))  # Units of Mpc^-1
     n_b: float = 2.0  # or 3.0 (Fig #7 in Power of Halometry)
     k_s: float = 0.05 * (1 / u.Mpc)  # Units of Mpc^-1
     #cosmo:astropy.cosmology.Cosmology() = cosmo
@@ -115,29 +116,35 @@ class Tinker(MassFunction):
         cosmol = Class()
         cosmol.set({'P_k_max_1/Mpc':100,'omega_b':cosmo.Ob0*h**2,'omega_m':cosmo.Om0*h**2,'h':cosmo.h,'A_s':2.100549e-09,
                     'n_s':0.9660499,'tau_reio':0.05430842})
-        cosmol.set({'output':'mPk'})
+        cosmol.set({'output':'mPk,mTk'})
         cosmol.compute()
+        phi_k = cosmol.get_primordial()['k [1/Mpc]']
+        phi_class = cosmol.get_primordial()['P_scalar(k)']
         kk = np.logspace(-3, np.log10(100), 10000)  # k in 1/Mpc
         Pk = [cosmol.pk(s,0.)*h**3 for s in kk]  # P(k) in (Mpc)**3
-
+        self.phi_class_interp = scipy.interpolate.interp1d(np.log10(phi_k), np.log10(phi_class), fill_value='extrapolate')
         self.F = scipy.interpolate.interp1d(np.log10(kk), np.log10(Pk), fill_value='extrapolate')
-        #end=time.time()
-        #print(f'Cosmo call: {(end-start):.6f} seconds')
+        # print('Got throught getPk')
         return self.F
 
     def phi(self,k):
-        return np.piecewise(k, [k<10**self.logk_b*u.Mpc, k>=10**self.logk_b*u.Mpc],
-               [lambda k:self.A_s * (k / (u.Mpc * self.k_s)) ** (self.n_s - 1),
-                lambda k:self.A_s * (10**self.logk_b / self.k_s) ** (self.n_s - 1) * (k / (u.Mpc * 10**self.logk_b)) ** (self.n_b - 1)])
+        # print('1:',10**((self.logk_b*u.Mpc).to('')))
+        # print('in phi')
+        # print(self.logk_b)
+        return np.piecewise(k, [k<10**((self.logk_b*u.Mpc).to('')), k>=10**((self.logk_b*u.Mpc).to(''))],
+               [lambda k:(self.A_s * (k / ((u.Mpc * self.k_s).to(''))) ** (self.n_s - 1)).to(''),
+                lambda k:(self.A_s * (10**((self.logk_b*u.Mpc).to('')) / ((self.k_s*u.Mpc).to(''))) ** (self.n_s - 1) * (k / (10**((self.logk_b*u.Mpc).to('')))) ** (self.n_b - 1)).to('')])
 
     def calc_f(self):
         self.f = (self.A * ((np.array(self.sig) / self.b) ** (-1 * self.a) + 1)) * np.exp(
             (-1 * self.c / (np.array((self.sig)) ** 2)))
+        # print('Got throught calc_f')
        # print("f(sig)= ", self.f)
 
     def radius(self):
         self.R = (3*self.m_l * u.M_sun/ (4 * np.pi * (Rho_mean.to(u.M_sun/u.pc**3)))) ** (1 / 3)
         #print("R= ", self.R)
+        # print('Got throught radius')
         return self.R
 
     def func(self,k,i):
@@ -146,17 +153,24 @@ class Tinker(MassFunction):
         f_3 = np.sin((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad) - (k * (1 / u.Mpc) * self.R[i]).to('') * np.cos(
             (k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
         f = (np.abs(f_2 * f_3) ** 2 * f_1).to('')
+        # print('Got throught func')
         return f #* self.phi(k)
 
     def calc_sig(self):
         k = np.logspace(-3, 5, 100)
+        # print(10 ** self.F(np.log10(k)))
+        self.transfer = 10 ** self.F(np.log10(k)) / 10 ** self.phi_class_interp(np.log10(k))
+        # print('After transfer in calc_sig')
+        # print(10 ** self.phi_class_interp(np.log10(k)))
+        self.Pk = (self.phi(k) * self.transfer)
+        # print('after newPk in calc_sig')
         int_val = []
         for i in range(len(self.R)):
-            integrand = self.func(k, i) * 10**self.F(np.log10(k))
+            integrand = self.func(k, i) * self.Pk
             integr = scipy.integrate.trapezoid(integrand, k)
             int_val.append(integr)
         for i in range(len(self.sig)):
-            self.sig[i] = np.sqrt(int_val[i])
+            self.sig[i] = np.sqrt(int_val[i].value)
         # F = self.getPk()
         # D2 = lambda k: 10**F(np.log10(k))*k**3/(2*np.pi**2*self.phi(k))
         # integrand = lambda k: self.func(k)* 10**F(np.log10(k))#D2(k)**2 *self.phi(k)
@@ -176,6 +190,7 @@ class Tinker(MassFunction):
         f_5 = 3 * (k * (1 / u.Mpc)) * np.cos((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
         f_6 = 1/u.Mpc * (k ** 2 * (1 / u.Mpc) * self.R[i]).to('') * np.sin((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
         f = ((f_2 * np.abs(f_3)) * f_1 * f_2 * (f_4 + f_5 + f_6)).to('')
+        # print('Got throught func_der')
         return f #* self.phi(k)
 
     def der_sig(self):
@@ -188,10 +203,11 @@ class Tinker(MassFunction):
         k = np.logspace(-3, 5, 100)
         int_val = []
         for i in range(len(self.R)):
-            integrand = self.func_der(k, i)*10**self.F(np.log10(k))
+            integrand = self.func_der(k, i)*self.Pk
             integr = scipy.integrate.trapezoid(integrand, k)
             int_val.append(integr.value)
         self.der = int_val
+        # print('Got throught der_sig')
         return self.der #units of 1/u.Mpc
 
     def find_Nl(self):
@@ -221,6 +237,139 @@ class Tinker(MassFunction):
         # N = norm * N
         # nlens = sum(N)#/10**5
         # print('lens',nlens)
+        ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
+        c = Counter(ran_samp)
+        nl = [c[m_l] for m_l in self.m_l]
+        self.n_l = np.random.poisson(nl)
+        if sum(self.n_l) == 0:
+            self.n_l[random.randint(0,len(self.n_l)-1)] = 1
+        # print('Got throught find_nl')
+
+    def __post_init__(self):
+        self.radius()
+        self.getPk()
+        self.calc_sig()
+        self.calc_f()
+        self.der_sig()
+        self.find_Nl()
+        pass
+
+@dataclass
+class Tinker_Mishra(MassFunction):
+    Name: str = 'Tinker'
+    m_l: list = field(default_factory=lambda: np.logspace(4, 12, 7))
+    den_n_l: list = field(default_factory=lambda: np.zeros(100))
+    n_l: list = field(default_factory=lambda: np.zeros(100))
+    A: float = 0.260  #FIXME Used values from colossus (https://bitbucket.org/bdiemer/colossus/src/master/colossus/lss/mass_function.py)
+    a: float = 2.66 #power
+    b: float = 1.41
+    c: float = 2.44 #power
+    sig: list = field(default_factory=lambda: [1 for i in range(100)])
+    der: list = field(default_factory=lambda: [1 for i in range(100)])
+    R: list = field(default_factory=lambda: [1 for i in range(100)])
+    f: list = field(default_factory=lambda: [1 for i in range(100)])
+    A_s: float = 2.105 * 10 ** -9
+    n_s: float = 0.9665
+    logkb: float = (np.log10(13) * (1 / u.Mpc))  # Units of Mpc^-1
+    nb: float = 3.0  # or 3.0 (Fig #7 in Power of Halometry)
+    k_s: float = 0.05 * (1 / u.Mpc)  # Units of Mpc^-1
+    nparams: int = 2
+    param_names: list = field(default_factory=lambda:['logkb', 'nb'])#, 'k_s'])#['a', 'b', 'c'])
+    param_range: dict = field(default_factory=lambda:{'logkb': (np.log10(5),np.log10(50)), 'nb':(1,3)}) #{ 'a': (1.8, 5), 'b':(0.001, 100), 'c':(1.8, 5)})
+
+    # def getPk(self):
+    #     cosmol = Class()
+    #     cosmol.set({'P_k_max_1/Mpc':100,'omega_b':cosmo.Ob0*h**2,'omega_m':cosmo.Om0*h**2,'h':cosmo.h,'A_s':2.100549e-09,
+    #                 'n_s':0.9660499,'tau_reio':0.05430842})
+    #     cosmol.set({'output':'mPk,mTk'})
+    #     cosmol.compute()
+    #     phi_k = cosmol.get_primordial()['k [1/Mpc]']
+    #     phi_class = cosmol.get_primordial()['P_scalar(k)']
+    #     kk = np.logspace(-3, np.log10(100), 10000)  # k in 1/Mpc
+    #     Pk = [cosmol.pk(s,0.)*h**3 for s in kk]  # P(k) in (Mpc)**3
+    #     self.phi_class_interp = scipy.interpolate.interp1d(np.log10(phi_k), np.log10(phi_class), fill_value='extrapolate')
+    #     self.F = scipy.interpolate.interp1d(np.log10(kk), np.log10(Pk), fill_value='extrapolate')
+    #     return self.F
+    def getPk(self):
+        with open('tinker_interpFunc.pkl', 'rb') as file:
+            self.interp_func = pkl.load(file)
+        # print('Past getPk')
+        return self.interp_func
+
+    def phi(self,k):
+        return np.piecewise(k, [k<10**((self.logkb*u.Mpc).to('')), k>=10**((self.logkb*u.Mpc).to(''))],
+               [lambda k:(self.A_s * (k / ((u.Mpc * self.k_s).to(''))) ** (self.n_s - 1)).to(''),
+                lambda k:(self.A_s * (10**((self.logkb*u.Mpc).to('')) / ((self.k_s*u.Mpc).to(''))) ** (self.n_s - 1) * (k / (10**((self.logkb*u.Mpc).to('')))) ** (self.nb - 1)).to('')])
+
+    def calc_f(self):
+        self.f = (self.A * ((np.array(self.sig) / self.b) ** (-1 * self.a) + 1)) * np.exp(
+            (-1 * self.c / (np.array((self.sig)) ** 2)))
+        # print('Past calc_f')
+
+    def radius(self):
+        self.R = (3*self.m_l * u.M_sun/ (4 * np.pi * (Rho_mean.to(u.M_sun/u.pc**3)))) ** (1 / 3)
+        # print('Past radius')
+        return self.R
+
+    def func(self,k,i):
+        f_1 = k**2/(2*np.pi**2) #1/k  #In units of u.Mpc
+        f_2 = 3 / ((k * (1 / u.Mpc) * self.R[i]).to('') ** 3)#* self.D2[k] ** 2
+        f_3 = np.sin((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad) - (k * (1 / u.Mpc) * self.R[i]).to('') * np.cos(
+            (k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
+        f = (np.abs(f_2 * f_3) ** 2 * f_1).to('')
+        # print('Past func')
+        return f #* self.phi(k)
+
+    def calc_sig(self):
+        k = np.logspace(-3, 5, 1000)
+        # self.transfer = 10 ** self.F(np.log10(k)) / 10 ** self.phi_class_interp(np.log10(k))
+        # self.Pk = (self.phi(k) * self.transfer)
+        self.Pk = 10**self.interp_func([[10**(self.logkb.value),self.nb,np.log10(kk)] for kk in k])
+        int_val = []
+        for i in range(len(self.R)):
+            integrand = self.func(k, i) * self.Pk
+            integr = scipy.integrate.trapezoid(integrand, k)
+            int_val.append(integr)
+        for i in range(len(self.sig)):
+            self.sig[i] = np.sqrt(int_val[i].value)
+        # print('Past calc_sig')
+        return self.sig
+
+    def func_der(self,k,i):
+        f_1 = k**2/(2*np.pi**2) * u.Mpc #1/k *u.Mpc #
+        f_2 =  3 / ((k * (1 / u.Mpc) * self.R[i]).to('') ** 3)# * self.D2[k] ** 2
+        f_3 = np.sin((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad) - (k * (1 / u.Mpc) * self.R[i]).to('') * np.cos(
+            (k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
+        f_4 = (-3 / self.R[i].value) * 1/u.Mpc *(u.Mpc / u.pc).to('') * np.sin((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
+        f_5 = 3 * (k * (1 / u.Mpc)) * np.cos((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
+        f_6 = 1/u.Mpc * (k ** 2 * (1 / u.Mpc) * self.R[i]).to('') * np.sin((k * (1 / u.Mpc) * self.R[i]).to('') * u.rad)
+        f = ((f_2 * np.abs(f_3)) * f_1 * f_2 * (f_4 + f_5 + f_6)).to('')
+        # print('Past func_der')
+        return f #* self.phi(k)
+
+    def der_sig(self):
+        k = np.logspace(-3, 5, 1000)
+        int_val = []
+        for i in range(len(self.R)):
+            integrand = self.func_der(k, i)* self.Pk
+            integr = scipy.integrate.trapezoid(integrand, k)
+            int_val.append(integr.value)
+        self.der = int_val
+        # print('Past der_sig')
+        return self.der #units of 1/u.Mpc
+
+    def find_Nl(self):
+        for i in range(len(self.n_l)): ##n_l units of 1/Mpc**3
+            self.den_n_l[i] = (4 / 3 * np.pi * (Rho_mean.to(u.M_sun/u.Mpc**3).value)) ** (-1 / 3) * 1/3 * (self.m_l[i]) ** (-2 / 3)* \
+                              self.f[i] * (Rho_mean.to(u.M_sun/u.Mpc**3).value) / self.m_l[i] * (-self.der[i]/self.sig[i]**2) #*self.m_l[i]
+
+        # print('Past den_n_l in find_Nl')
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
+        correction = (vol / MW_vol).value * 76.66
+        # correction = vol.value
+        # correction = 1
+        integr = scipy.integrate.cumulative_trapezoid((self.den_n_l*correction), self.m_l)
+        nlens = integr[-1]
         ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
         c = Counter(ran_samp)
         nl = [c[m_l] for m_l in self.m_l]
@@ -349,13 +498,15 @@ class CDM_Test(MassFunction):
         # print('vol=',vol)
         ##For Roman vol Only
         ## Since its dN/dM, dividing by MW vol and multiplying by roman vol
-        correction= (vol/MW_vol).value *76.66#Correction factor w/ avg density in roman vs MW
+        # correction= (vol/MW_vol).value*76.66#Correction factor w/ avg density in roman vs MW
+        correction = 1
         #Should be in Mpc but converting both to Mpc will cancel out
         # print((vol/MW_vol).value)
 
         self.integr = scipy.integrate.cumulative_trapezoid((self.den_n_l*correction), self.m_l)
         nlens = self.integr[-1]
-        print(correction)
+        print('MW',nlens)
+        # print(correction)
         # print('Last in cumulative trapz:', self.integr[-1])
         # self.integr = np.insert(self.integr,0,0)
         # print('integr + size:', integr, np.size(integr))
@@ -373,6 +524,9 @@ class CDM_Test(MassFunction):
         # if nlens>1000:
         #     print('nlens>1000 in CDM,', int(nlens))
         # print('nlens,norm',nlens,norm)
+        if np.log10(nlens)>9:
+            nlens = nlens/10**(np.floor(np.log10(nlens))-8)
+            print('lowered nlens:',nlens)
         ran_samp = np.random.choice(self.m_l, int(nlens), p=self.den_n_l / sum(self.den_n_l))
         c = Counter(ran_samp)
         nl = [c[m_l] for m_l in self.m_l]
@@ -420,19 +574,18 @@ class WDM_stream(MassFunction):
         #Convert from dN/dlnM to dN/dM--
         self.den_n_l = self.den_n_l / self.m_l
 
-        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
-        correction= (vol / MW_vol).value * 76.66 ##Accounting for Roman vol with density correction!
-
-        integr = scipy.integrate.cumulative_trapezoid((self.den_n_l*correction), self.m_l)
-        integr = np.insert(integr, 0, 0)
-        N = np.diff(integr, prepend=0)
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.  # * 12 * 8 * 10l
+        correction = (vol / MW_vol).value * 76.66  # Correction factor w/ avg density in roman vs MW
+        self.integr = scipy.integrate.cumulative_trapezoid((self.den_n_l * correction), self.m_l)
+        nlens = self.integr[-1]
+        # N = np.diff(integr, prepend=0)
         # m_dm = np.sum(N * self.m_l) * u.Msun
         # m_sur = Rho_dm * vol
         # # norm = m_sur / m_dm
         # norm = vol / MW_vol
         # print('WDM norm=', norm)
         # N = norm * N
-        nlens = sum(N)#/10**5
+        # nlens = sum(N)#/10**5
         # print('nlens WDM',nlens)
         ran_samp = np.random.choice(self.m_l, int(nlens), p=self.den_n_l / sum(self.den_n_l))
         c = Counter(ran_samp)
@@ -510,11 +663,11 @@ class PBH(MassFunction): ##Check on normalization
     den_n_l: list = field(default_factory=lambda: np.zeros((100)))
     n_l: list = field(default_factory=lambda: np.zeros((100)))
     sig: float = 1.0
-    logf_pbh: float = -2
+    logfpbh: float = -2
     m_c: float = 1.0
     nparams: int = 1
-    param_names: list = field(default_factory=lambda: ['logf_pbh'])
-    param_range: dict = field(default_factory=lambda: {'logf_pbh': (-9, 0)})
+    param_names: list = field(default_factory=lambda: ['logfpbh'])
+    param_range: dict = field(default_factory=lambda: {'logfpbh': (-9, 0)})
 
     def calc(self):
         #print('m_l:',self.m_l)
@@ -522,35 +675,69 @@ class PBH(MassFunction): ##Check on normalization
         self.sig = np.std(np.log(self.m_l))
         #print('m_c,sig:',self.m_c,self.sig)
     def find_Nl(self):
-        self.den_n_l = 10**self.logf_pbh/(np.sqrt(2*np.pi) * 10**self.sig *self.m_l)*\
+        self.den_n_l = 10**self.logfpbh/(np.sqrt(2*np.pi) * 10**self.sig *self.m_l)*\
                        np.exp(-np.log(self.m_l/10**self.m_c)**2/(2*10**self.sig))  ##Units of M_sun^-1
-        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. * 70
-        self.den_n_l *= vol.value ##Assuming it's dn/dM
-        integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
-        integr = np.insert(integr,0,0)
-        N = np.diff(integr, prepend=0)
-        # print('N before norm',np.sum(N))
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
+        rho_pbh = gsh.density(6*u.kpc)
+        # self.den_n_l *= vol.value ##Assuming it's dn/dM
+        # print('vol:',vol)
+        # correction = 76.66
+        # correction = 1
+        # correction = (vol / MW_vol).value * 76.66
+        # self.integr = scipy.integrate.cumulative_trapezoid((self.den_n_l * correction), self.m_l)
+        self.integr = scipy.integrate.cumulative_trapezoid(((self.den_n_l * rho_pbh)/self.m_l), self.m_l)
+        nlens = self.integr[-1]
+        # integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l)
+        # integr = np.insert(integr,0,0)
+        # N = np.diff(integr, prepend=0)
+        # # print('N before norm',np.sum(N))
         # m_dm = np.sum(N* self.m_l) * u.Msun
         # m_sur = Rho_dm * vol
         # norm = m_sur/m_dm
-        # norm = vol / MW_vol
-        # print('PBH norm,total nlens=', norm, sum(norm*N))
-        # print('Milkyway norm, total nlens=', norm_MW, sum(norm_MW*N))
+        # # norm = vol / MW_vol
+        # # print('PBH norm,total nlens=', norm, sum(norm*N))
+        # # print('Milkyway norm, total nlens=', norm_MW, sum(norm_MW*N))
         # N = norm*N
         #print(m_dm, N)
-        nlens= sum(N)
-        print('PBH lens', nlens)
-        ran_samp = np.random.choice(self.m_l, np.int64(nlens), p=self.den_n_l / sum(self.den_n_l))
+        # nlens= sum(N)
+        # print('PBH lens', nlens)
+        ran_samp = np.random.choice(self.m_l, int(nlens), p=self.den_n_l / sum(self.den_n_l))
         c = Counter(ran_samp)
         nl = [c[m_l] for m_l in self.m_l]
         # print('nl,',nl)
         self.n_l = np.random.poisson(nl)
-
         if sum(self.n_l) == 0:
-            self.n_l[random.randint(0,len(self.n_l)-1)] = 1
+            self.n_l[random.randint(0, len(self.n_l) - 1)] = 1
 
     def __post_init__(self):
         self.calc()
+        self.find_Nl()
+
+@dataclass
+class PBH_Gaussian(MassFunction): ##Check on normalization
+    Name: str = 'PBH'
+    # m_l: list = field(default_factory=lambda: np.logspace(0, 3, 100))
+    n_l: list = field(default_factory=lambda: np.zeros((100)))
+    logmass: float = 0
+    sigma: float = 10
+    nparams: int = 2
+    param_names: list = field(default_factory=lambda: ['logmass','sigma'])
+    param_range: dict = field(default_factory=lambda: {'logmass': (0, 3), 'sigma':(0.072267, 67.39665)})
+
+    def find_Nl(self):
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
+        dist = np.random.normal(loc=10**self.logmass, scale=self.sigma, size=1000)
+        dist = dist[dist>=0]
+        counts, bins = np.histogram(dist)
+        self.m_l = bins[1:]
+        m_dm = np.sum(counts) * u.Msun
+        m_sur = Rho_dm * vol
+        norm = m_sur / m_dm
+        self.n_l = np.random.poisson(norm*counts)
+        if sum(self.n_l) == 0:
+            self.n_l[random.randint(0, len(self.n_l) - 1)] = 1
+
+    def __post_init__(self):
         self.find_Nl()
 
 @dataclass

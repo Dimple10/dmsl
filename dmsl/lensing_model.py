@@ -18,7 +18,7 @@ def alphal(Ml, bvec, vvec):
     assumed to be in km/s.
     '''
     # print('In lensing model 5')
-    #start1 = time.perf_counter()
+    # start1 = time.perf_counter()
     if isinstance(bvec, u.Quantity) == False:
         bvec *= u.kpc
     if isinstance(vvec, u.Quantity) == False:
@@ -31,16 +31,16 @@ def alphal(Ml, bvec, vvec):
         b = np.linalg.norm(bvec)
         v = np.linalg.norm(vvec)
     accmag = 4 * const.G * v**2 / (const.c**2 * b**3)
-    # end1= time.perf_counter()
+    end1= time.perf_counter()
     vec_part = alphal_vec(Ml, bvec, vvec)
-    # start2=time.perf_counter()
+    start2=time.perf_counter()
     if accmag.ndim == 1:
         alphal = accmag[:,np.newaxis] * vec_part
     else:
         alphal = accmag*vec_part
     #print('in lm, accmag, vec:', accmag,vec_part)
-    #end2=time.perf_counter()
-    #print(f'Time taken for alphal (not alpha_vec): {((end2 - start2)+(end1-start1)):.6f} second')
+    # end2=time.perf_counter()
+    # print(f'Time taken for lensing model: {(end2 - start1):.6f} second')
     return (alphal).to(u.uas / u.yr**2, equivalencies = u.dimensionless_angles())
 
 def alphal_vec(Ml, bvec, vvec, vdotvec = None):
@@ -54,7 +54,7 @@ def alphal_vec(Ml, bvec, vvec, vdotvec = None):
     assumed to be in km/s.
     '''
 
-    #start=time.perf_counter()
+    # start=time.perf_counter()
     if isinstance(bvec, u.Quantity) == False:
         bvec *= u.kpc
     if isinstance(vvec, u.Quantity) == False:
@@ -130,6 +130,6 @@ def alphal_vec(Ml, bvec, vvec, vdotvec = None):
         #print('Mlprime shape=',np.shape(Ml.Mpprime(b)*b**2[:]))
 
     alphal_vec = Term1 + Term2 + Term3
-    #end = time.perf_counter()
-    #print(f'Time taken for alphal_vec: {(end-start):.6f} second')
+    # end = time.perf_counter()
+    # print(f'Time taken for alphal_vec: {(end-start):.6f} second')
     return alphal_vec

@@ -65,8 +65,12 @@ def plot_emcee(flatchain, nstars, nsamples,ndims, massprofile, surveyname,
             paper_plot()
             fig = plt.figure()
             try:
-                up95 = np.percentile(flatchain[:, i+1], 90)
-                plt.hist(flatchain[:, i+1], 20, color="k", histtype="step", density=True);
+                if massfunctiontype is not 'PBH':
+                    up95 = np.percentile(flatchain[:, i+1], 90)
+                    plt.hist(flatchain[:, i+1], 20, color="k", histtype="step", density=True);
+                elif massfunctiontype is 'PBH':
+                    up95 = np.percentile(flatchain[:, i], 90)
+                    plt.hist(flatchain[:, i], 20, color="k", histtype="step", density=True);
             except:
                 up95 = np.percentile(flatchain, 90)
                 plt.hist(flatchain, 20, color="k", histtype="step", density=True);

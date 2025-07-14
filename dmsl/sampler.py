@@ -416,7 +416,7 @@ class Sampler():
             # print('Third nan check lnlike')
             return -np.inf
         chisq = -0.5 * np.sum((diff)**2 / self.survey.alphasigma.value**2 -np.log(2 * np.pi * self.survey.alphasigma.value**2))
-        self.chisq.append([pars,chisq]) #specific to 1 par case
+        # self.chisq.append([pars,chisq]) #specific to 1 par case
         # end = time.perf_counter()
         # print(f'Time taken for lnlike: {(end-start):.6f} second')
         return chisq
@@ -524,10 +524,10 @@ class Sampler():
                 # a = pars[i+0]
                 # b = pars[i+1]
                 # c = pars[i+2]
-                logk_b = pars[i+0]
+                logk_b = pars[i+0]*1/u.Mpc
                 n_b = pars[i+1]
                 #k_s = pars[i+6]
-                newmf = mf.Tinker(m_l=self.massfunction.m_l,logk_b=logk_b,n_b=n_b,sur=self.survey)#, k_b=k_b, n_b=n_b, k_s=k_s)
+                newmf = mf.Tinker_Mishra(m_l=self.massfunction.m_l,logkb=logk_b,nb=n_b,sur=self.survey)#, k_b=k_b, n_b=n_b, k_s=k_s)
             elif mftype == 'CDM':
                 # loga = pars[i+0]
                 b = pars[i+0]
@@ -554,10 +554,12 @@ class Sampler():
                 newmf = mf.PressSchechter_test(m_l=self.massfunction.m_l,del_crit = del_crit,sur=self.survey)#,b = b,logc = logc)
             elif mftype == 'PBH':
                 #print('inside pbh make new mass')
-                logf_pbh = pars[i+0]
+                # logfpbh = pars[i+0]
                 #b = pars[i+1]
                 #logc = pars[i+2]
-                newmf = mf.PBH(m_l=self.massfunction.m_l,logf_pbh = logf_pbh,sur=self.survey)
+                logmass = pars[i+0]
+                sigma = pars[i+1]
+                newmf = mf.PBH_Gaussian(logmass = logmass,sigma = sigma, sur=self.survey)
             #else:
              #   raise NotImplementedError("""Need to add this mass function to
               #  sampler.""")
