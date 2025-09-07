@@ -49,7 +49,7 @@ def plot_emcee(flatchain, nstars, nsamples,ndims, massprofile, surveyname,
         labels.append('logR0')
     if usefraction:
         kwargs['f'] = 0
-    if massfunction is not None:
+    if massfunction!=None:
         massfunctiontype = massfunction.Name
         mf_args = massfunction.param_names
         for i in range(len(mf_args)):
@@ -65,10 +65,10 @@ def plot_emcee(flatchain, nstars, nsamples,ndims, massprofile, surveyname,
             paper_plot()
             fig = plt.figure()
             try:
-                if massfunctiontype is not 'PBH':
+                if massfunctiontype!='PBH':
                     up95 = np.percentile(flatchain[:, i+1], 90)
                     plt.hist(flatchain[:, i+1], 20, color="k", histtype="step", density=True);
-                elif massfunctiontype is 'PBH':
+                elif massfunctiontype=='PBH':
                     up95 = np.percentile(flatchain[:, i], 90)
                     plt.hist(flatchain[:, i], 20, color="k", histtype="step", density=True);
             except:
@@ -96,7 +96,7 @@ def plot_emcee(flatchain, nstars, nsamples,ndims, massprofile, surveyname,
         savefig(fig, outpath, writepdf=0, dpi=100)
     else:
         for key in kwargs.keys():
-            print(key)
+            # print(key)
             # if massfunction:
             #     extra_string = f'post_{surveyname}_{massprofiletype}_{massfunctiontype}_{key}'
             #     es = f'post_test_pspl_{key}_{arg}'

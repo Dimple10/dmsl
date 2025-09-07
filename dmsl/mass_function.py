@@ -491,21 +491,21 @@ class CDM_Test(MassFunction):
     param_range: dict = field(default_factory=lambda: {'b': (-2.5, -1), 'logc': (6, 8)})
 
     def find_Nl(self):
-        self.den_n_l = (10 ** self.loga) * ((self.m_l / (10 ** self.logc)) ** self.b)  ##Units of M_sun^-1
+        self.den_n_l = (10 ** self.loga) * ((self.m_l / (10 ** self.logc)) ** self.b)/45  ##Units of M_sun^-1
         ##FIXME Higher by a factor of 10 than in the Shutz paper
         # print('dn/dm=',self.den_n_l)
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3. #* 12 * 8 * 10
         # print('vol=',vol)
         ##For Roman vol Only
         ## Since its dN/dM, dividing by MW vol and multiplying by roman vol
-        # correction= (vol/MW_vol).value*76.66#Correction factor w/ avg density in roman vs MW
-        correction = 1
+        correction= (vol/MW_vol).value*76.66#Correction factor w/ avg density in roman vs MW
+        # correction = 1
         #Should be in Mpc but converting both to Mpc will cancel out
         # print((vol/MW_vol).value)
 
         self.integr = scipy.integrate.cumulative_trapezoid((self.den_n_l*correction), self.m_l)
         nlens = self.integr[-1]
-        print('MW',nlens)
+        # print('MW',nlens)
         # print(correction)
         # print('Last in cumulative trapz:', self.integr[-1])
         # self.integr = np.insert(self.integr,0,0)
@@ -534,6 +534,7 @@ class CDM_Test(MassFunction):
 
         self.n_l = np.random.poisson(nl)
         if sum(self.n_l) == 0:
+            # print('Added random lens')
             self.n_l[random.randint(0,len(self.n_l)-1)] = 1
         #print('final nl=', self.n_l)
 

@@ -41,7 +41,7 @@ RHO_DM = gsh.density(8.*u.kpc)
 class Sampler():
 
     def __init__(self, nstars=None, nsamples=1000, nchains=8, ntune=1000,
-            ndims=2, minlogMl=np.log10(1e0), maxlogMl=np.log10(1e8), MassProfile=mp.PointSource(**{'Ml' :
+            ndims=2, minlogMl=np.log10(1e0), maxlogMl=np.log10(1e6), MassProfile=mp.PointSource(**{'Ml' :
                 1.e7*u.Msun}),MassFunction=None, SNRcutoff=10., survey=None, overwrite=True,
             usefraction=False):
         self.nstars=nstars
@@ -182,6 +182,15 @@ class Sampler():
         # thin = int(0.5 * np.min(old_tau))
         # print("burn-in: {0}".format(burnin))
         # print("thin: {0}".format(thin))
+
+        try:
+            tau = sampler.get_autocorr_time()
+            print(f"Autocorrelation times: {tau}")
+            converged = np.all(max_n > 50 * tau)
+            print(f"Has the chain converged? {converged}")
+        except emcee.autocorr.AutocorrError:
+            print(
+                "Chains are too short or not well-behaved for reliable autocorrelation time estimation. Consider running for more steps.")
 
         samples = sampler.get_chain(discard=self.ntune, flat=True)
         print(f"95\% upper limit on c200: {np.percentile(samples[:, 0], 95)}")
@@ -429,6 +438,7 @@ class Sampler():
 
     @staticmethod
     def find_nlens(Ml_, survey):
+        # print(Ml_)
         volume = survey.fov_rad**2 * survey.maxdlens**3 / 3.
         mass = (RHO_DM*volume).to(u.Msun)
         nlens_k = mass.value/Ml_
@@ -437,10 +447,14 @@ class Sampler():
     def load_data(self):
         print('Creating data vector')
         #if False: #Switch to if statement below for CDM as null hypothesis for WDM
-        if (self.massfunction.Name == 'WDM Stream' or self.massfunction.Name == 'WDM Lensing'):
-            # print('inside WDM') #FIXME
-            self.data = AccelData(self.survey, nstars=self.nstars,
-                ndims=self.ndims,wdm=True).data.to_numpy()
+        if self.massfunction!=None:
+            if (self.massfunction.Name == 'WDM Stream' or self.massfunction.Name == 'WDM Lensing'):
+                # print('inside WDM') #FIXME
+                self.data = AccelData(self.survey, nstars=self.nstars,
+                    ndims=self.ndims,wdm=True).data.to_numpy()
+            else:
+                self.data = AccelData(self.survey, nstars=self.nstars,
+                                      ndims=self.ndims).data.to_numpy()
         else:
             self.data = AccelData(self.survey, nstars=self.nstars,
                                   ndims=self.ndims).data.to_numpy()
