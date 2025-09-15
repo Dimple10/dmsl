@@ -103,13 +103,13 @@ class Tinker(MassFunction):
     f: list = field(default_factory=lambda: [1 for i in range(100)])
     A_s: float = 2.105 * 10 ** -9
     n_s: float = 0.9665
-    logk_b: float = (np.log10(13) * (1 / u.Mpc))  # Units of Mpc^-1
-    n_b: float = 2.0  # or 3.0 (Fig #7 in Power of Halometry)
+    logkb: float = (np.log10(13) * (1 / u.Mpc))  # Units of Mpc^-1
+    nb: float = 2.0  # or 3.0 (Fig #7 in Power of Halometry)
     k_s: float = 0.05 * (1 / u.Mpc)  # Units of Mpc^-1
     #cosmo:astropy.cosmology.Cosmology() = cosmo
     nparams: int = 2
-    param_names: list = field(default_factory=lambda:['logk_b', 'n_b'])#, 'k_s'])#['a', 'b', 'c'])
-    param_range: dict = field(default_factory=lambda:{'logk_b': (-2,2), 'n_b':(1,4)}) #{ 'a': (1.8, 5), 'b':(0.001, 100), 'c':(1.8, 5)})
+    param_names: list = field(default_factory=lambda:['logkb', 'nb'])#, 'k_s'])#['a', 'b', 'c'])
+    param_range: dict = field(default_factory=lambda:{'logkb': (-2,2), 'nb':(1,4)}) #{ 'a': (1.8, 5), 'b':(0.001, 100), 'c':(1.8, 5)})
 
     def getPk(self):
         #start=time.time()
@@ -131,9 +131,9 @@ class Tinker(MassFunction):
         # print('1:',10**((self.logk_b*u.Mpc).to('')))
         # print('in phi')
         # print(self.logk_b)
-        return np.piecewise(k, [k<10**((self.logk_b*u.Mpc).to('')), k>=10**((self.logk_b*u.Mpc).to(''))],
+        return np.piecewise(k, [k<10**((self.logkb*u.Mpc).to('')), k>=10**((self.logkb*u.Mpc).to(''))],
                [lambda k:(self.A_s * (k / ((u.Mpc * self.k_s).to(''))) ** (self.n_s - 1)).to(''),
-                lambda k:(self.A_s * (10**((self.logk_b*u.Mpc).to('')) / ((self.k_s*u.Mpc).to(''))) ** (self.n_s - 1) * (k / (10**((self.logk_b*u.Mpc).to('')))) ** (self.n_b - 1)).to('')])
+                lambda k:(self.A_s * (10**((self.logkb*u.Mpc).to('')) / ((self.k_s*u.Mpc).to(''))) ** (self.n_s - 1) * (k / (10**((self.logkb*u.Mpc).to('')))) ** (self.nb - 1)).to('')])
 
     def calc_f(self):
         self.f = (self.A * ((np.array(self.sig) / self.b) ** (-1 * self.a) + 1)) * np.exp(
@@ -256,7 +256,7 @@ class Tinker(MassFunction):
 
 @dataclass
 class Tinker_Mishra(MassFunction):
-    Name: str = 'Tinker'
+    Name: str = 'TinkerMishra'
     m_l: list = field(default_factory=lambda: np.logspace(4, 12, 7))
     den_n_l: list = field(default_factory=lambda: np.zeros(100))
     n_l: list = field(default_factory=lambda: np.zeros(100))

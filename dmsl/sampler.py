@@ -538,10 +538,18 @@ class Sampler():
                 # a = pars[i+0]
                 # b = pars[i+1]
                 # c = pars[i+2]
-                logk_b = pars[i+0]*1/u.Mpc
-                n_b = pars[i+1]
+                logkb = pars[i+0]*1/u.Mpc
+                nb = pars[i+1]
                 #k_s = pars[i+6]
-                newmf = mf.Tinker_Mishra(m_l=self.massfunction.m_l,logkb=logk_b,nb=n_b,sur=self.survey)#, k_b=k_b, n_b=n_b, k_s=k_s)
+                newmf = mf.Tinker(m_l=self.massfunction.m_l,logkb=logkb,nb=nb,sur=self.survey)
+            elif mftype == 'TinkerMishra':
+                # a = pars[i+0]
+                # b = pars[i+1]
+                # c = pars[i+2]
+                logkb = pars[i+0]*1/u.Mpc
+                nb = pars[i+1]
+                #k_s = pars[i+6]
+                newmf = mf.Tinker_Mishra(m_l=self.massfunction.m_l,logkb=logkb,nb=nb,sur=self.survey)#, k_b=k_b, n_b=n_b, k_s=k_s)
             elif mftype == 'CDM':
                 # loga = pars[i+0]
                 b = pars[i+0]
