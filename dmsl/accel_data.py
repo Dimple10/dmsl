@@ -70,11 +70,11 @@ class AccelData():
         self.survey=survey
         self.alphal = self.samplealphal(pars,survey,nstars,mptype=mptype,mftype=mftype)
         #FIXME
-        # if self.massprofile.type == 'ps':
-        #     # if ps, need to do snr check and re-sample if any have too high snr. this stops walkers from getting too stuck.
-        #      alphal = self.snr_check(alphal, pars)
-        #      if alphal == "error":
-        #          return -np.inf
+        if mptype.type == 'ps':
+            # if ps, need to do snr check and re-sample if any have too high snr. this stops walkers from getting too stuck.
+             alphal = self.snr_check(self.alphal, pars,survey,nstars,mptype,mftype)
+             if alphal == "error":
+                 return -np.inf
         if np.any(np.isnan(self.alphal)): #FIXME Should not be needed!
             # print('inside np.isnan lnlike')
             return -np.inf
@@ -87,17 +87,45 @@ class AccelData():
             return -np.inf
         chisq = -0.5 * np.sum((diff)**2 / survey.alphasigma.value**2 -np.log(2 * np.pi * survey.alphasigma.value**2))
         return chisq
+    
+    def snr_check(self, alphal0, pars,survey,nstars,mptype,mftype, maxiter=100): #FIXME handle array as alphal0 -- only for ps
+            if ~np.any(np.isfinite(alphal0)): return "error"
+            SNRcutoff = 10
+            alphanorm = np.linalg.norm(alphal0, axis=1)
+            mask = alphanorm < survey.alphasigma*SNRcutoff
+            alphal = alphal0[mask, :]
+            count = 0
+            while len(alphal) < nstars:
+                newalphas = self.samplealphal(pars,survey,nstars,mptype=mptype,mftype=mftype)
+                alphanorm = np.linalg.norm(newalphas, axis=1)
+                mask = alphanorm < survey.alphasigma*SNRcutoff
+                alphal = np.append(alphal, newalphas[mask, :], axis=0)
+                count +=1
+                if count > maxiter:
+                    return "error"
+            alphal = alphal[:nstars, :]
+            return alphal
 
-    def samplealphal(self, pars, survey, nstars,mptype=None,mftype=None):
+    def samplealphal(self, pars, survey, nstars,mptype=None,mftype=None, bs_upper_factor=1):
         rv = gsh.initialize_dist(target=survey.target,
                                  rmax=survey.maxdlens.to(u.kpc).value)
         self.rdist = rv
         self.survey = survey
-        #print('stars',nstars)
-        # print('upper bs limit:',np.log10(np.sqrt(2)*survey.fov_rad))
-        self.bs = np.logspace(-8, np.log10(np.sqrt(2)*survey.fov_rad),nstars)
+        self.bs = np.logspace(np.log10(bs_upper_factor * 3e-2), np.log10(bs_upper_factor * np.sqrt(2) * survey.fov_rad), nstars)
         #print('bs min',np.min(self.bs))
-        newmp, newmassfunction = self.make_new_mass(pars,nstars,mptype,mftype)
+        if mftype==None:
+            newmp = self.make_new_mass(pars,nstars,mptype,mftype)
+            log10Ml = pars[0]
+
+            Ml = 10 ** log10Ml
+            # Ml1 = 1
+            # Ml2 = 1e6
+            nlens = int(np.ceil(self.find_nlens(Ml, self.survey)))
+            ## Testing for 1 mass profile at a time!
+
+        else:
+            print('mftype lens', sum(mftype.n_l))
+            newmp, newmassfunction = self.make_new_mass(pars,nstars,mptype,mftype)
         if np.size(newmp) > 1:
             mp_indices=np.random.randint(0, len(newmp), nstars)
             newmassprofile = [newmp[i] for i in mp_indices]
@@ -106,6 +134,8 @@ class AccelData():
         nlens = newmassfunction.n_l
         if sum(nlens) ==0:
             nlens[0] = 1
+        # if nlens ==0:
+        #     nlens=1
         priorpdf = pdf(self.bs, a1=survey.fov_rad, a2=survey.fov_rad,
             n=sum(nlens))
         #print(priorpdf, self.bs, sum(nlens))
@@ -122,7 +152,9 @@ class AccelData():
         sci = self.sci_s(x)
         #print('pdf:',sci/sum(sci))
         temp = np.random.choice(x, nstars, p=sci / sum(sci)) #* self.dists
+        # print(temp)
         self.beff = 10**(np.ones(temp.shape)*np.average(temp)) * self.dists
+        # print(self.beff)
         # self.beff = 10 ** (temp) * self.dists
         #self.beff = 10 ** (np.random.choice(x, nstars, p=sci / sum(sci))) * self.dists
         #print('dist min', np.min(self.dists))
@@ -151,118 +183,144 @@ class AccelData():
         #print(f'Time taken for lensing model: {(end-start):.6f} second')
         return self.alphal
 
+    @staticmethod
+    def find_nlens(Ml_, survey):
+        # print(Ml_)
+        RHO_DM = gsh.density(8. * u.kpc)
+        volume = survey.fov_rad ** 2 * survey.maxdlens ** 3 / 3.
+        mass = (RHO_DM * volume).to(u.Msun)
+        nlens_k = mass.value / Ml_
+        return np.ceil(nlens_k)
+
     def make_new_mass(self,pars,nstars,mpt,mft): #FIXME For mf does this need to be mf + mp? or just mf?
         mptype = mpt.type
         mftype = mft.Name
         kwargs = mpt.kwargs
         i = 1
-        if mptype == 'ps':
-            i = 0
-        if mftype == 'PowerLaw':
-            logalpha = pars[i+0]
-            logM0 = pars[i+1]
-            newmf = mf.PowerLaw(m_l=mft.m_l,logM_0=logM0, logalpha=logalpha,sur=self.survey)
-        # elif mftype == 'Tinker':
-        #     # A = pars[i+0]
-        #     a = pars[i+0]
-        #     b = pars[i+1]
-        #     c = pars[i+2]
-        #     #k_b = pars[i+4]
-        #     #n_b = pars[i+5]
-        #     #k_s = pars[i+6]
-        #     newmf = mf.Tinker(m_l=mft.m_l, a= a, b= b, c= c,sur=self.survey)#, k_b=k_b, n_b=n_b, k_s=k_s)
-        elif mftype == 'Tinker':
-            logkb = pars[i+0]*u.Mpc
-            nb = pars[i+1]
-            newmf = mf.Tinker_Mishra(m_l=mft.m_l, logkb=logkb,nb=nb, sur=self.survey)  # , k_b=k_b, n_b=n_b, k_s=k_s)
-        elif mftype == 'CDM':
-            # loga = pars[i+0]
-            b = pars[i+0]
-            logc = pars[i+1]
-            newmf = mf.CDM_Test(m_l=mft.m_l, b = b,logc = logc,sur=self.survey)
-        elif mftype == 'WDM Lensing':
-            mwdm = pars[i+0]
-            beta = pars[i+1]
-            newmf = mf.WDM_lensing(m_l=mft.m_l,mwdm=mwdm, beta=beta,sur=self.survey)
-        elif mftype == 'WDM Stream':
-            logmwdm = pars[i+0]
-            gamma = pars[i+1]
-            beta = pars[i+2]
-            # loga_cdm = pars[i+3]
-            # b_cdm = pars[i+4]
-            # logc_cdm =pars[i+5]
-            newmf = mf.WDM_stream(m_l=mft.m_l,logmwdm=logmwdm,gamma=gamma, beta=beta,sur=self.survey)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
-        elif mftype == 'Press Schechter':
-            del_crit = pars[i+0]
-            newmf = mf.PressSchechter_test(m_l=mft.m_l,del_crit = del_crit,sur=self.survey)
-        # elif mftype == 'PBH':
-        #     logf_pbh = pars[i+0]
-        #     newmf = mf.PBH(m_l=mft.m_l,logf_pbh = logf_pbh,sur=self.survey)
-        elif mftype == 'PBH':
-            logmass = pars[i + 0]
-            sigma = pars[i + 1]
-            newmf = mf.PBH_Gaussian(logmass=logmass, sigma=sigma, sur=self.survey)
-        else:
-           raise NotImplementedError("""Need to add this mass function to
-           sampler.""")
-
-        newmp = []
-        n_lens = sum(newmf.n_l.astype(int))
-        if n_lens > 1:
-            nonzero = np.nonzero(newmf.n_l)
-            sampling_pool = np.repeat(nonzero, newmf.n_l[nonzero])
-            ran_samp = np.random.choice(sampling_pool, nstars, replace=True)
-        if mptype == 'ps':
-            if n_lens == 1:
-                index = np.nonzero(newmf.n_l.astype(int))
-                kwargs['Ml'] = int(newmf.m_l[index[0]]) * u.Msun
-                newmp = mp.PointSource(**kwargs)
+        if mftype:
+            if mptype == 'ps':
+                i = 0
+            if mftype == 'PowerLaw':
+                logalpha = pars[i+0]
+                logM0 = pars[i+1]
+                newmf = mf.PowerLaw(m_l=mftype.m_l,logM_0=logM0, logalpha=logalpha,sur=self.survey)
+            # elif mftype == 'Tinker':
+            #     # A = pars[i+0]
+            #     a = pars[i+0]
+            #     b = pars[i+1]
+            #     c = pars[i+2]
+            #     #k_b = pars[i+4]
+            #     #n_b = pars[i+5]
+            #     #k_s = pars[i+6]
+            #     newmf = mf.Tinker(m_l=mft.m_l, a= a, b= b, c= c,sur=self.survey)#, k_b=k_b, n_b=n_b, k_s=k_s)
+            elif mftype == 'Tinker':
+                logkb = pars[i+0]*u.Mpc
+                nb = pars[i+1]
+                newmf = mf.Tinker_Mishra(m_l=mftype.m_l, logkb=logkb,nb=nb, sur=self.survey)  # , k_b=k_b, n_b=n_b, k_s=k_s)
+            elif mftype == 'CDM':
+                # loga = pars[i+0]
+                b = pars[i+0]
+                logc = pars[i+1]
+                newmf = mf.CDM_Test(m_l=mftype.m_l, b = b,logc = logc,sur=self.survey)
+            elif mftype == 'WDM Lensing':
+                mwdm = pars[i+0]
+                beta = pars[i+1]
+                newmf = mf.WDM_lensing(m_l=mftype.m_l,mwdm=mwdm, beta=beta,sur=self.survey)
+            elif mftype == 'WDM Stream':
+                logmwdm = pars[i+0]
+                gamma = pars[i+1]
+                beta = pars[i+2]
+                # loga_cdm = pars[i+3]
+                # b_cdm = pars[i+4]
+                # logc_cdm =pars[i+5]
+                newmf = mf.WDM_stream(m_l=mftype.m_l,logmwdm=logmwdm,gamma=gamma, beta=beta,sur=self.survey)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
+            elif mftype == 'Press Schechter':
+                del_crit = pars[i+0]
+                newmf = mf.PressSchechter_test(m_l=mftype.m_l,del_crit = del_crit,sur=self.survey)
+            # elif mftype == 'PBH':
+            #     logf_pbh = pars[i+0]
+            #     newmf = mf.PBH(m_l=mft.m_l,logf_pbh = logf_pbh,sur=self.survey)
+            elif mftype == 'PBH':
+                logmass = pars[i + 0]
+                sigma = pars[i + 1]
+                newmf = mf.PBH_Gaussian(m_l=mft.m_l,logmass=logmass, sigma=sigma, sur=self.survey)
             else:
-                for newmf_ml, num_lenses in zip(newmf.m_l, newmf.n_l.astype(int)):
-                    kwargs['Ml'] = newmf_ml*u.Msun
-                    newmp.extend([mp.PointSource(**kwargs)for _ in range(num_lenses)])
-                if len(newmp) == 0:
-                    print('no lens sampler')
-                    kwargs['Ml'] = int(newmf.m_l[0]) * u.Msun
+               raise NotImplementedError("""Need to add this mass function to
+               sampler.""")
+
+            newmp = []
+            n_lens = sum(newmf.n_l.astype(int))
+            if n_lens > 1:
+                nonzero = np.nonzero(newmf.n_l)
+                sampling_pool = np.repeat(nonzero, newmf.n_l[nonzero])
+                ran_samp = np.random.choice(sampling_pool, nstars, replace=True)
+            if mptype == 'ps':
+                if n_lens == 1:
+                    index = np.nonzero(newmf.n_l.astype(int))
+                    kwargs['Ml'] = int(newmf.m_l[index[0]]) * u.Msun
                     newmp = mp.PointSource(**kwargs)
+                else:
+                    for newmf_ml, num_lenses in zip(newmf.m_l, newmf.n_l.astype(int)):
+                        kwargs['Ml'] = newmf_ml*u.Msun
+                        newmp.extend([mp.PointSource(**kwargs)for _ in range(num_lenses)])
+                    if len(newmp) == 0:
+                        print('no lens sampler')
+                        kwargs['Ml'] = int(newmf.m_l[0]) * u.Msun
+                        newmp = mp.PointSource(**kwargs)
 
-        elif mptype == 'gaussian':
-            kwargs['R0'] = 10**pars[0]*u.pc
-            if n_lens ==1:
-                index = np.nonzero(newmf.n_l)
-                kwargs['Ml'] = newmf.m_l[index[0]] * u.Msun
-                newmp = mp.Gaussian(**kwargs)
-            else:
-                for newmf_ml, num_lenses in zip(newmf.m_l, newmf.n_l):
-                    kwargs['Ml'] = newmf_ml * u.Msun
-                    newmp.extend([mp.Gaussian(**kwargs) for _ in range(num_lenses)])
-                if len(newmp) == 0:
-                    print('no lens sampler')
-                    kwargs['Ml'] = newmf.m_l[0] * u.Msun
+            elif mptype == 'gaussian':
+                kwargs['R0'] = 10**pars[0]*u.pc
+                if n_lens ==1:
+                    index = np.nonzero(newmf.n_l)
+                    kwargs['Ml'] = newmf.m_l[index[0]] * u.Msun
                     newmp = mp.Gaussian(**kwargs)
-        elif mptype == 'nfw':
-            kwargs['c200'] = 10**pars[0]
-            #print('in nfw makenewmass')
-            if n_lens == 1: ##Case with only one lens, add the mass profile corresponding to it as an object not list
-                index = np.nonzero(newmf.n_l.astype(int))
-                kwargs['Ml'] = int(newmf.m_l[index[0]]) * u.Msun
+                else:
+                    for newmf_ml, num_lenses in zip(newmf.m_l, newmf.n_l):
+                        kwargs['Ml'] = newmf_ml * u.Msun
+                        newmp.extend([mp.Gaussian(**kwargs) for _ in range(num_lenses)])
+                    if len(newmp) == 0:
+                        print('no lens sampler')
+                        kwargs['Ml'] = newmf.m_l[0] * u.Msun
+                        newmp = mp.Gaussian(**kwargs)
+            elif mptype == 'nfw':
+                kwargs['c200'] = 10**pars[0]
+                #print('in nfw makenewmass')
+                if n_lens == 1: ##Case with only one lens, add the mass profile corresponding to it as an object not list
+                    index = np.nonzero(newmf.n_l.astype(int))
+                    kwargs['Ml'] = int(newmf.m_l[index[0]]) * u.Msun
+                    newmp = mp.NFW(**kwargs)
+                else:
+                    #print(newmf.n_l)
+                    for newmf_ml, num_lenses in zip(newmf.m_l, newmf.n_l.astype(int)):
+                        #print(ind123)
+                        kwargs['Ml'] = newmf_ml * u.Msun
+                        newmp.extend([mp.NFW(**kwargs) for _ in range(num_lenses)])
+                    if len(newmp) == 0: ##Case where there are no lens, assume 1 exists in the lowest mass bin
+                        print('no lens sampler')
+                        kwargs['Ml'] = int(newmf.m_l[0]) * u.Msun
+                        newmp = mp.NFW(**kwargs)
+
+            else:
+                raise NotImplementedError("""Need to add this mass profile/mass function to
+                sampler.""")
+                # print(type(newmp[0]), np.size(newmp))
+                #print('done w makenewmass')
+        else:
+            kwargs = mpt.kwargs
+            if mptype == 'ps':
+                kwargs['Ml'] = 10**pars[0]*u.Msun
+                newmp = mp.PointSource(**kwargs)
+            elif mptype == 'gaussian':
+                kwargs['Ml'] = 10**pars[0]*u.Msun
+                kwargs['R0'] = 10**pars[1]*u.pc
+                newmp = mp.Gaussian(**kwargs)
+            elif mptype == 'nfw':
+                kwargs['Ml'] = 10**pars[0]*u.Msun
+                kwargs['c200'] = 10**pars[1]
                 newmp = mp.NFW(**kwargs)
             else:
-                #print(newmf.n_l)
-                for newmf_ml, num_lenses in zip(newmf.m_l, newmf.n_l.astype(int)):
-                    #print(ind123)
-                    kwargs['Ml'] = newmf_ml * u.Msun
-                    newmp.extend([mp.NFW(**kwargs) for _ in range(num_lenses)])
-                if len(newmp) == 0: ##Case where there are no lens, assume 1 exists in the lowest mass bin
-                    print('no lens sampler')
-                    kwargs['Ml'] = int(newmf.m_l[0]) * u.Msun
-                    newmp = mp.NFW(**kwargs)
-
-        else:
-            raise NotImplementedError("""Need to add this mass profile/mass function to
-            sampler.""")
-            # print(type(newmp[0]), np.size(newmp))
-            #print('done w makenewmass')
+                raise NotImplementedError("""Need to add this mass profile to
+                sampler.""")
         return newmp, newmf #Array of mp
 
     def mwdm_case(self, survey, nstars, mass):

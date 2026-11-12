@@ -12,7 +12,7 @@ make_file_path
 
 '''
 import numpy as np
-import pymc as pm
+import pymc3 as pm
 import exoplanet_core as xo
 import datetime
 

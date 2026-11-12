@@ -11,7 +11,7 @@ from dataclasses import dataclass,field
 import dmsl.survey as surv
 from scipy.integrate import quad_vec
 from collections import Counter
-from classy import Class
+# from classy import Class
 import scipy
 import random
 import time
@@ -374,8 +374,8 @@ class Tinker_Mishra(MassFunction):
         c = Counter(ran_samp)
         nl = [c[m_l] for m_l in self.m_l]
         self.n_l = np.random.poisson(nl)
-        if sum(self.n_l) == 0:
-            self.n_l[random.randint(0,len(self.n_l)-1)] = 1
+        # if sum(self.n_l) == 0:
+        #     self.n_l[random.randint(0,len(self.n_l)-1)] = 1
 
     def __post_init__(self):
         self.radius()
@@ -486,9 +486,12 @@ class CDM_Test(MassFunction):
     loga: float = np.log10(3.26 * 10 ** -5)
     b: float = -1.9
     logc: float = np.log10(2.57 * 10 ** 7)
-    nparams: int = 2
-    param_names: list = field(default_factory=lambda: ['b', 'logc'])
-    param_range: dict = field(default_factory=lambda: {'b': (-2.5, -1), 'logc': (6, 8)})
+    # nparams: int = 2
+    # param_names: list = field(default_factory=lambda: ['b', 'logc'])
+    # param_range: dict = field(default_factory=lambda: {'b': (-2.5, -1), 'logc': (6, 8)})
+    nparams: int = 1
+    param_names: list = field(default_factory=lambda: ['b'])
+    param_range: dict = field(default_factory=lambda: {'b': (-2.5, -1)})
 
     def find_Nl(self):
         self.den_n_l = (10 ** self.loga) * ((self.m_l / (10 ** self.logc)) ** self.b)/45  ##Units of M_sun^-1
@@ -524,18 +527,18 @@ class CDM_Test(MassFunction):
         # if nlens>1000:
         #     print('nlens>1000 in CDM,', int(nlens))
         # print('nlens,norm',nlens,norm)
-        if np.log10(nlens)>9:
-            nlens = nlens/10**(np.floor(np.log10(nlens))-8)
-            print('lowered nlens:',nlens)
+        # if np.log10(nlens)>9:
+        #     nlens = nlens/10**(np.floor(np.log10(nlens))-8)
+        #     print('lowered nlens:',nlens)
         ran_samp = np.random.choice(self.m_l, int(nlens), p=self.den_n_l / sum(self.den_n_l))
         c = Counter(ran_samp)
         nl = [c[m_l] for m_l in self.m_l]
         # print('nl=', nl)
 
         self.n_l = np.random.poisson(nl)
-        if sum(self.n_l) == 0:
+        # if sum(self.n_l) == 0:
             # print('Added random lens')
-            self.n_l[random.randint(0,len(self.n_l)-1)] = 1
+            # self.n_l[random.randint(0,len(self.n_l)-1)] = 1
         #print('final nl=', self.n_l)
 
     def __post_init__(self):
@@ -592,8 +595,8 @@ class WDM_stream(MassFunction):
         c = Counter(ran_samp)
         nl = [c[m_l] for m_l in self.m_l]
         self.n_l = np.random.poisson(nl)
-        if sum(self.n_l) == 0:
-            self.n_l[random.randint(0,len(self.n_l)-1)] = 1
+        # if sum(self.n_l) == 0:
+        #     self.n_l[random.randint(0,len(self.n_l)-1)] = 1
         # print('nl:',self.n_l)
         # integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l, initial=integr[0])
         # N = np.diff(integr, prepend=integr[0])
@@ -714,10 +717,25 @@ class PBH(MassFunction): ##Check on normalization
         self.calc()
         self.find_Nl()
 
+# _LOGM_LO, _LOGF_LO = np.log10(200.), -4.0   # f = 1e-4 at 200 Msun
+# _LOGM_HI, _LOGF_HI = np.log10(1000.), -7.0  # f = 1e-7 at 1000 Msun
+
+# def f_pbh_ceiling(m):
+#     """f_PBH = 1e-3 for 1-200 Msun; steep power-law drop 1e-4 -> 1e-7 over 200-1000 Msun."""
+#     m = np.asarray(m, dtype=float)
+#     logm = np.log10(np.clip(m, 1e-30, None))
+#     logf = np.where(
+#         logm <= _LOGM_LO,
+#         -3.0,
+#         np.interp(logm, [_LOGM_LO, _LOGM_HI], [_LOGF_LO, _LOGF_HI],
+#                   left=_LOGF_LO, right=_LOGF_HI)
+#     )
+#     return 10.0**logf
+
 @dataclass
 class PBH_Gaussian(MassFunction): ##Check on normalization
     Name: str = 'PBH'
-    # m_l: list = field(default_factory=lambda: np.logspace(0, 3, 100))
+    m_l: list = field(default_factory=lambda: np.logspace(0, 3, 100))
     n_l: list = field(default_factory=lambda: np.zeros((100)))
     logmass: float = 0
     sigma: float = 10
@@ -725,20 +743,28 @@ class PBH_Gaussian(MassFunction): ##Check on normalization
     param_names: list = field(default_factory=lambda: ['logmass','sigma'])
     param_range: dict = field(default_factory=lambda: {'logmass': (0, 3), 'sigma':(0.072267, 67.39665)})
 
+    def f_pbh_ceiling(self, m):
+        return 10.0 ** self.fpbh_interp(np.log10(m))
+
     def find_Nl(self):
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
         dist = np.random.normal(loc=10**self.logmass, scale=self.sigma, size=1000)
         dist = dist[dist>=0]
-        counts, bins = np.histogram(dist)
-        self.m_l = bins[1:]
-        m_dm = np.sum(counts) * u.Msun
-        m_sur = Rho_dm * vol
+        counts, bins = np.histogram(dist, bins=self.m_l)
+        # self.m_l = bins[1:]
+        # m_dm = np.sum(counts) * u.Msun
+        mass_centers = (bins[1:] + bins[:-1]) / 2
+        m_dm = np.sum(counts * mass_centers) * u.Msun
+        m_sur = Rho_dm * vol * 76.66
         norm = m_sur / m_dm
-        self.n_l = np.random.poisson(norm*counts)
-        if sum(self.n_l) == 0:
-            self.n_l[random.randint(0, len(self.n_l) - 1)] = 1
+        weight = self.f_pbh_ceiling(mass_centers)
+        self.n_l = np.random.poisson(norm*counts*weight)
+        # if sum(self.n_l) == 0:
+        #     self.n_l[random.randint(0, len(self.n_l) - 1)] = 1
 
     def __post_init__(self):
+        with open('f_pbh_interp.pkl', 'rb') as file:
+            self.fpbh_interp = pkl.load(file)
         self.find_Nl()
 
 @dataclass

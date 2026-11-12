@@ -10,7 +10,7 @@ import numpy as np
 #import corner
 import pandas as pd
 #TEST
-import pymc as pm
+import pymc3 as pm
 import matplotlib.cm
 from scipy.spatial import distance
 from scipy.stats import trim1
@@ -43,7 +43,7 @@ class Sampler():
     def __init__(self, nstars=None, nsamples=1000, nchains=8, ntune=1000,
             ndims=2, minlogMl=np.log10(1e0), maxlogMl=np.log10(1e6), MassProfile=mp.PointSource(**{'Ml' :
                 1.e7*u.Msun}),MassFunction=None, SNRcutoff=10., survey=None, overwrite=True,
-            usefraction=False):
+            usefraction=False, bs_upper_factor=4):
         self.nstars=nstars
         self.nsamples=nsamples
         self.nchains=nchains
@@ -60,6 +60,7 @@ class Sampler():
         self.logconcmin = 0
         self.overwrite = overwrite
         self.usefraction = usefraction # Also sameple for fractional dark matter, just multiple nlens with f_chi
+        self.bs_upper_factor = bs_upper_factor
         if survey is None:
             self.survey = Roman()
         else:
@@ -120,13 +121,14 @@ class Sampler():
             if self.usefraction: #FIXME Should work just fine -- possible shape error
                 p0[:, -1] = np.random.rand(nwalkers)
 
+        moves = [(emcee.moves.DEMove(), 0.8), (emcee.moves.DESnookerMove(), 0.2)] #All moves are from Claude to speadup stuff
         ## set different likelihood if noise mcmc.
         if self.massprofile.type == 'noise':
             npar = 2
             p0 = np.random.rand(nwalkers, npar)*1.e-3
-            sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike_noise)
+            sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike_noise, moves=moves)
         else:
-            sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike)
+            sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike, moves=moves)
 
         # Burn-in
         # state = sampler.sample(p0, 100)
@@ -167,8 +169,7 @@ class Sampler():
         # print("Serial took {0:.1f} seconds".format(serial_time))
         # print("Sampling..")
         with Pool() as pool:
-            # print('Inside pool')
-            sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike, pool=pool)
+            sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike, pool=pool, moves=moves)
             start = time.time()
             sampler.run_mcmc(p0, max_n, progress=True)
             end = time.time()
@@ -245,7 +246,9 @@ class Sampler():
         npar_mf = self.massfunction.nparams
         p_mf = np.empty(shape=(nwalkers, npar_mf))
         for i in range(npar_mf):
-            p_mf[:,i] = np.random.rand(nwalkers) + self.massfunction.param_range[self.massfunction.param_names[i]][0]
+            lo, hi = self.massfunction.param_range[self.massfunction.param_names[i]]
+            p_mf[:,i] = np.random.uniform(lo, hi, nwalkers)
+            # p_mf[:,i] = np.random.rand(nwalkers) + self.massfunction.param_range[self.massfunction.param_names[i]][0]
         return p_mf
 
     def logprior(self,pars): ##Just checks if params to be sampled are within physical range
@@ -309,12 +312,26 @@ class Sampler():
             log10Ml = pars[0]
 
             Ml = 10**log10Ml
+            # Ml1 = 1
+            # Ml2 = 1e6
+            # nlens1 = int(np.ceil(f*Sampler.find_nlens(Ml1, self.survey)))
+            # nlens2 = int(np.ceil(f*Sampler.find_nlens(Ml2, self.survey)))
+            # priorpdf1 = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
+            #                n=nlens1)
+            # priorpdf2 = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
+                        #    n=nlens2)
             nlens = int(np.ceil(f*Sampler.find_nlens(Ml, self.survey)))
             priorpdf = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
                            n=nlens)
         else:
             # start2 = time.perf_counter()
-            newmassprofile, newmassfunction = self.make_new_mass(pars)
+            # newmassprofile, newmassfunction = self.make_new_mass(pars)
+            ## Changing for PBH no lens added -- 
+            result = self.make_new_mass(pars)
+            if isinstance(result, (float,str)):
+                return result
+            newmassprofile, newmassfunction = result
+
             # end2 = time.perf_counter()
             # print(f'Time taken for makenewmass: {(end2 - start2):.6f} second')
             nlens = np.ceil(f*newmassfunction.n_l)
@@ -338,12 +355,25 @@ class Sampler():
             # print('First nan check samplealpha')
             return -np.inf
 
-        # start3 =time.perf_counter()
-        priorpdfspline = UnivariateSpline(np.log10(self.bs[priorpdf>0]),
-                np.log10(priorpdf[priorpdf>0]), ext='zeros', s=0)
+        # start3 =time.perf_counter()mask = priorpdf > 0
+        mask = priorpdf > 0
+        if mask.sum() < 4:  # UnivariateSpline needs at least k+1 points (default k=3)
+            return -np.inf
+        priorpdfspline = UnivariateSpline(np.log10(self.bs[mask]),
+          np.log10(priorpdf[mask]), ext='zeros', s=0)
+        # priorpdfspline = UnivariateSpline(np.log10(self.bs[priorpdf>0]),
+        #         np.log10(priorpdf[priorpdf>0]), ext='zeros', s=0)
+        # priorpdfspline1 = UnivariateSpline(np.log10(self.bs[priorpdf1 > 0]),
+        #                                   np.log10(priorpdf[priorpdf1 > 0]), ext='zeros', s=0)
+        # priorpdfspline2 = UnivariateSpline(np.log10(self.bs[priorpdf2 > 0]),
+        #                                   np.log10(priorpdf[priorpdf2 > 0]), ext='zeros', s=0)
         dists = self.rdist.rvs(self.nstars) * u.kpc
         x = np.log10(self.bs)
         y = 10**priorpdfspline(np.log10(self.bs))
+        # y1 = 10 ** priorpdfspline1(np.log10(self.bs))
+        # y2 = 10 ** priorpdfspline2(np.log10(self.bs))
+        # sci_s = scipy.interpolate.interp1d(x, y, fill_value='extrapolate')
+        # sci = sci_s(x)
         sci_s = scipy.interpolate.interp1d(x, y, fill_value='extrapolate')
         sci = sci_s(x)
         if np.any(np.isnan(sci)):
@@ -383,23 +413,45 @@ class Sampler():
         # print(f'Time taken for samplealpha: {(end-start):.6f} second')
         return alphal
 
-    def snr_check(self, alphal0, pars, maxiter=100): #FIXME handle array as alphal0 -- only for ps
-        if ~np.any(np.isfinite(alphal0)): return "error"
+    # def snr_check(self, alphal0, pars, maxiter=100): #FIXME handle array as alphal0 -- only for ps
+    #     if ~np.any(np.isfinite(alphal0)): return "error"
+
+    #     alphanorm = np.linalg.norm(alphal0, axis=1)
+    #     mask = alphanorm < self.survey.alphasigma*self.SNRcutoff
+    #     alphal = alphal0[mask, :]
+    #     count = 0
+    #     while len(alphal) < self.nstars:
+    #         count +=1
+    #         newalphas = self.samplealphal(pars)
+    #         alphanorm = np.linalg.norm(newalphas, axis=1)
+    #         mask = alphanorm < self.survey.alphasigma*self.SNRcutoff
+    #         alphal = np.append(alphal, newalphas[mask, :], axis=0)
+    #         # newalphas = self.samplealphal(pars)
+    #         if isinstance(newalphas, float) or not np.all(np.isfinite(newalphas)):
+    #             continue 
+    #         if count > maxiter:
+    #             return "error"
+    #     alphal = alphal[:self.nstars, :]
+    #     return alphal
+    def snr_check(self, alphal0, pars, maxiter=100):
+        if isinstance(alphal0, (float, str)) or not np.all(np.isfinite(alphal0)):
+            return "error"
 
         alphanorm = np.linalg.norm(alphal0, axis=1)
-        mask = alphanorm < self.survey.alphasigma*self.SNRcutoff
+        mask = alphanorm < self.survey.alphasigma * self.SNRcutoff
         alphal = alphal0[mask, :]
         count = 0
         while len(alphal) < self.nstars:
-            newalphas = self.samplealphal(pars)
-            alphanorm = np.linalg.norm(newalphas, axis=1)
-            mask = alphanorm < self.survey.alphasigma*self.SNRcutoff
-            alphal = np.append(alphal, newalphas[mask, :], axis=0)
-            count +=1
-            if count > maxiter:
+            count += 1
+            if count > maxiter:                       # check first, so continue can't bypass it
                 return "error"
-        alphal = alphal[:self.nstars, :]
-        return alphal
+            newalphas = self.samplealphal(pars)
+            if isinstance(newalphas, (float, str)) or not np.all(np.isfinite(newalphas)):
+                continue                           # rejected draw: retry
+            alphanorm = np.linalg.norm(newalphas, axis=1)
+            mask = alphanorm < self.survey.alphasigma * self.SNRcutoff
+            alphal = np.append(alphal, newalphas[mask, :], axis=0)
+        return alphal[:self.nstars, :]
 
     def lnlike(self,pars):
         # print('In lnlike 1')
@@ -408,13 +460,18 @@ class Sampler():
             # print('First nan check lnlike')
             return -np.inf
         alphal = self.samplealphal(pars)
+        if isinstance(alphal, str):                  # "nolens": the model predicts no signal
+            sig = self.survey.alphasigma.value
+            return -0.5 * np.sum(self.data**2 / sig**2 - np.log(2*np.pi*sig**2))
+        if isinstance(alphal, float):
+            return -np.inf
+        
         #FIXME
         if self.massprofile.type == 'ps':
             # if ps, need to do snr check and re-sample if any have too high snr. this stops walkers from getting too stuck.
              alphal = self.snr_check(alphal, pars)
-             if alphal == "error":
-                 # print('snr nan check lnlike')
-                 return -np.inf
+             if isinstance(alphal, str):              # was: alphal == "error"
+                return -np.inf
         if np.any(np.isnan(alphal)): #FIXME Should not be needed!
             # print('Second nan check lnlike')
             return -np.inf
@@ -464,10 +521,11 @@ class Sampler():
         rv = gsh.initialize_dist(target=self.survey.target,
                 rmax=self.survey.maxdlens.to(u.kpc).value)
         self.rdist = rv
-        self.bs = np.logspace(-8, np.log10(np.sqrt(2)*self.survey.fov_rad),
+        self.bs = np.logspace(
+                np.log10(1e-8), 
+                np.log10(np.sqrt(2) * self.survey.fov_rad),
                 self.nstars)
-        #print(self.bs)
-        print('Prior loaded')
+        print(f'Prior loaded (bs_upper_factor={self.bs_upper_factor}, bs=[{self.bs.min():.2e}, {self.bs.max():.2e}])')
 
     def make_diagnostic_plots(self):
         #flatchain = self.sampler.get_chain(flat=True, discard=self.ntune)
@@ -553,9 +611,9 @@ class Sampler():
             elif mftype == 'CDM':
                 # loga = pars[i+0]
                 b = pars[i+0]
-                logc = pars[i+1]
+                # logc = pars[i+1]
                 #print('before CDM makenewmass')
-                newmf = mf.CDM_Test(m_l=self.massfunction.m_l, b = b,logc = logc,sur=self.survey)
+                newmf = mf.CDM_Test(m_l=self.massfunction.m_l, b = b,sur=self.survey)
                 #print('after CDM makenewmass')
             elif mftype == 'WDM Stream':
                 logmwdm = pars[i+0]
@@ -586,7 +644,15 @@ class Sampler():
              #   raise NotImplementedError("""Need to add this mass function to
               #  sampler.""")
             newmp = []
-            n_lens = sum(newmf.n_l)
+            # n_lens = sum(newmf.n_l)
+            ##Testing Pbh No Added Lens 
+            n_l = np.asarray(newmf.n_l).astype(int)
+            n_lens = n_l.sum()
+            if n_lens == 0:
+                # return -np.inf
+                return "nolens"
+            nonzero = np.nonzero(n_l)[0]   
+
             # start = time.perf_counter()
             if n_lens>1:
                 nonzero = np.nonzero(newmf.n_l)

@@ -6,7 +6,7 @@ Makes plots
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
-import pymc as pm
+import pymc3 as pm
 import seaborn as sns
 import corner
 import numpy as np
@@ -155,7 +155,7 @@ def plot_chains(samples, outpath):
     plt.close('all')
     paper_plot()
     fig = plt.figure()
-    plt.plot(samples[:,:,0])
+    plt.plot(samples[:,:,1])
     plt.ylabel(r'$\\log_{{10}} {c_{200}}$');
     #plt.ylabel(r'$m_{wdm}$');
     plt.xlabel(r'N');
