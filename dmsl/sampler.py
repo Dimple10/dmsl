@@ -1,6 +1,7 @@
 '''
 MCMC sampler
 '''
+import os
 import time
 
 import emcee
@@ -37,6 +38,13 @@ from multiprocessing import Pool
 import time
 RHO_DM = gsh.density(8.*u.kpc)
 
+def _seed_worker():
+    '''Forked workers inherit the parent's RNG state, so every worker would draw the same random numbers.
+    Reseed numpy and the stdlib random module (used in mass_function) from OS entropy.'''
+    import os, random
+    seed = int.from_bytes(os.urandom(4), 'little')
+    np.random.seed(seed)
+    random.seed(seed)
 
 class Sampler():
 
@@ -96,9 +104,9 @@ class Sampler():
 
         npar = npar_mf + npar_mp
         print("Total pars:", npar)
+
         ## initial walker position
-        if npar_mf == 0: #Only Mass-Profile tested
-            #print('Initializing mass profile')
+        if npar_mf == 0:
             p0 = np.random.rand(nwalkers, npar_mp)*2+self.minlogMl #-- Kris needed to not get stuck sampling
             if self.massprofile.type == 'gaussian':
                 p0[:, 1] = np.random.rand(nwalkers)*(self.logradmax-self.logradmin) + self.logradmin
@@ -107,7 +115,6 @@ class Sampler():
             if self.usefraction:
                 p0[:, -1] = np.random.rand(nwalkers)
         else:
-            #print('Initializing mass profile and mass function')
             p0 = np.random.rand(nwalkers, npar)
             name = self.massprofile.type
             if(name == 'ps'):
@@ -130,59 +137,25 @@ class Sampler():
         else:
             sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike, moves=moves)
 
-        # Burn-in
-        # state = sampler.sample(p0, 100)
-        # sampler.reset()
-
         ##Testing auto-correlation time for samples
         max_n = self.ntune+self.nsamples
-        # We'll track how the average autocorrelation time estimate changes
+
         index = 0
         autocorr = np.empty(max_n)
         old_tau = np.inf
         # Now we'll sample for up to max_n steps
         print("Sampling..")
-        # ctr = 0
-        # start = time()
-        # sampler.run_mcmc(p0, max_n, progress=True)
-        # for sample in sampler.sample(p0, iterations=max_n, progress=True):
-        #     # Only check convergence every 100 steps
-        #     if sampler.iteration % 100:
-        #         continue
-        #
-        #     # Compute the autocorrelation time so far
-        #     # Using tol=0 means that we'll always get an estimate even
-        #     # if it isn't trustworthy
-        #     tau = sampler.get_autocorr_time(tol=0)
-        #     autocorr[index] = np.mean(tau)
-        #     index += 1
-        #
-        #     # Check convergence
-        #     converged = np.all(tau * 50 < sampler.iteration)
-        #     converged &= np.all(np.abs(old_tau - tau) / tau < 0.01)
-        #     if converged and ctr==0:
-        #         print('Converged at..', sampler.iteration)
-        #         ctr+=1
-        #     old_tau = tau
-        # end = time()
-        # serial_time = end-start
-        # print("Serial took {0:.1f} seconds".format(serial_time))
-        # print("Sampling..")
-        with Pool() as pool:
+        nproc = int(os.environ.get('SLURM_CPUS_PER_TASK', os.cpu_count()))   # cluster: cores given to the job, local: all cores
+        nproc = max(1, min(nproc, self.nchains // 2))                         # emcee evaluates half the walkers at a time
+        print(f'Pool with {nproc} processes')
+        with Pool(processes=nproc, initializer=_seed_worker) as pool:
+        # with Pool(initializer=_seed_worker) as pool:
             sampler = emcee.EnsembleSampler(nwalkers, npar, self.lnlike, pool=pool, moves=moves)
             start = time.time()
             sampler.run_mcmc(p0, max_n, progress=True)
             end = time.time()
             multi_time = end - start
             print("Multiprocessing took {0:.1f} seconds".format(multi_time))
-        #     #print("{0:.1f} times faster than serial".format(serial_time / multi_time))
-        ## run sampler
-        #print("Sampling..")
-        #sampler.run_mcmc(p0, self.ntune+self.nsamples, progress=True)
-        # burnin = int(2 * np.max(old_tau))
-        # thin = int(0.5 * np.min(old_tau))
-        # print("burn-in: {0}".format(burnin))
-        # print("thin: {0}".format(thin))
 
         try:
             tau = sampler.get_autocorr_time()
@@ -300,9 +273,6 @@ class Sampler():
         return 0.
 
     def samplealphal(self, pars):
-        ## Samples p(alpha_l | M_l)
-        # print('In samplealpha 2')
-        # start = time.perf_counter()
         if self.usefraction:
             f = pars[-1]
         else:
@@ -312,77 +282,18 @@ class Sampler():
             log10Ml = pars[0]
 
             Ml = 10**log10Ml
-            # Ml1 = 1
-            # Ml2 = 1e6
-            # nlens1 = int(np.ceil(f*Sampler.find_nlens(Ml1, self.survey)))
-            # nlens2 = int(np.ceil(f*Sampler.find_nlens(Ml2, self.survey)))
-            # priorpdf1 = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
-            #                n=nlens1)
-            # priorpdf2 = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
-                        #    n=nlens2)
-            nlens = int(np.ceil(f*Sampler.find_nlens(Ml, self.survey)))
-            priorpdf = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
-                           n=nlens)
+            N = int(np.ceil(f*Sampler.find_nlens(Ml, self.survey)))
         else:
-            # start2 = time.perf_counter()
-            # newmassprofile, newmassfunction = self.make_new_mass(pars)
-            ## Changing for PBH no lens added -- 
             result = self.make_new_mass(pars)
             if isinstance(result, (float,str)):
                 return result
             newmassprofile, newmassfunction = result
+            N = int(np.sum(np.ceil(f*newmassfunction.n_l)))
 
-            # end2 = time.perf_counter()
-            # print(f'Time taken for makenewmass: {(end2 - start2):.6f} second')
-            nlens = np.ceil(f*newmassfunction.n_l)
-            # print('total lens:',sum(nlens))
-            # if sum(nlens) ==0:
-            #     # print('no lens in sampler 2')
-            #     nlens[0] = 1
-            priorpdf = pdf(self.bs, a1=self.survey.fov_rad, a2=self.survey.fov_rad,
-                n=sum(nlens))
-            # print('Successfully called priorpdf without overflow errors')
+        dists = self.rdist.rvs(self.nstars)                          # d_L per star [kpc]
+        beta = sample_beta(self.nstars, self.survey.fov_rad, N)      # beta per star [rad]
+        beff = beta * dists                                          # b per star [kpc]
 
-            # if np.size(newmp) > 1:
-            #     # print('More than 1 mp, pars: ', pars)
-            #     mp_indices = np.random.randint(0, len(newmp), self.nstars)
-            #     newmassprofile = [newmp[i] for i in mp_indices]
-            # else:
-            #     newmassprofile = newmp
-
-        #print(priorpdf, self.bs, sum(nlens))
-        if np.any(np.isnan(priorpdf)):
-            # print('First nan check samplealpha')
-            return -np.inf
-
-        # start3 =time.perf_counter()mask = priorpdf > 0
-        mask = priorpdf > 0
-        if mask.sum() < 4:  # UnivariateSpline needs at least k+1 points (default k=3)
-            return -np.inf
-        priorpdfspline = UnivariateSpline(np.log10(self.bs[mask]),
-          np.log10(priorpdf[mask]), ext='zeros', s=0)
-        # priorpdfspline = UnivariateSpline(np.log10(self.bs[priorpdf>0]),
-        #         np.log10(priorpdf[priorpdf>0]), ext='zeros', s=0)
-        # priorpdfspline1 = UnivariateSpline(np.log10(self.bs[priorpdf1 > 0]),
-        #                                   np.log10(priorpdf[priorpdf1 > 0]), ext='zeros', s=0)
-        # priorpdfspline2 = UnivariateSpline(np.log10(self.bs[priorpdf2 > 0]),
-        #                                   np.log10(priorpdf[priorpdf2 > 0]), ext='zeros', s=0)
-        dists = self.rdist.rvs(self.nstars) * u.kpc
-        x = np.log10(self.bs)
-        y = 10**priorpdfspline(np.log10(self.bs))
-        # y1 = 10 ** priorpdfspline1(np.log10(self.bs))
-        # y2 = 10 ** priorpdfspline2(np.log10(self.bs))
-        # sci_s = scipy.interpolate.interp1d(x, y, fill_value='extrapolate')
-        # sci = sci_s(x)
-        sci_s = scipy.interpolate.interp1d(x, y, fill_value='extrapolate')
-        sci = sci_s(x)
-        if np.any(np.isnan(sci)):
-            # print('impact param interpolation sci has nan')
-            return -np.inf
-        temp = np.random.choice(x, self.nstars, p=sci / sum(sci)) #* dists
-        self.beff_avg.append(np.average(temp))
-        beff = 10**(np.ones(temp.shape)*np.average(temp)) * dists
-        # beff = 10 ** (temp) * dists
         vl = scipy.stats.truncnorm.rvs(a=0, b=550./220, loc=0.,scale =220, size=self.nstars)
         bvec = np.zeros((self.nstars, 2))
         vvec = np.zeros((self.nstars, 2))
@@ -394,46 +305,18 @@ class Sampler():
             vvec[:, 0] = vl * np.cos(vtheta)
             vvec[:, 1] = vl * np.sin(vtheta)
         else:
-            ## default to b perp. to v. gives larger signal for NFW halo
             bvec[:,0] = beff
             vvec[:, 1] = vl
-        ## add units back in because astropy is dumb...or really probably it's
-        ## me.
         bvec *= u.kpc
         vvec *= u.km / u.s
-        ## get alphal given sampled other params.
-        # end3 = time.perf_counter()
-        # print(f'Time taken for beff + middle in samplealpha: {(end3 - start3):.6f} second')
-        alphal = lm.alphal(newmassprofile, bvec, vvec)
-        #print('Outside lensing model')
-        ## if only sampling in 1D, get magnitude of vec.
+        # alphal = lm.alphal(newmassprofile, bvec, vvec)
+        eff = np.clip(1. - dists / self.survey.dstars.to(u.kpc).value, 0., None)   # D_LS/D_S per star
+        alphal = lm.alphal(newmassprofile, bvec, vvec, eff=eff)
         if self.ndims == 1:
             alphal = np.linalg.norm(alphal, axis=1)
-        # end = time.perf_counter()
-        # print(f'Time taken for samplealpha: {(end-start):.6f} second')
         return alphal
 
-    # def snr_check(self, alphal0, pars, maxiter=100): #FIXME handle array as alphal0 -- only for ps
-    #     if ~np.any(np.isfinite(alphal0)): return "error"
-
-    #     alphanorm = np.linalg.norm(alphal0, axis=1)
-    #     mask = alphanorm < self.survey.alphasigma*self.SNRcutoff
-    #     alphal = alphal0[mask, :]
-    #     count = 0
-    #     while len(alphal) < self.nstars:
-    #         count +=1
-    #         newalphas = self.samplealphal(pars)
-    #         alphanorm = np.linalg.norm(newalphas, axis=1)
-    #         mask = alphanorm < self.survey.alphasigma*self.SNRcutoff
-    #         alphal = np.append(alphal, newalphas[mask, :], axis=0)
-    #         # newalphas = self.samplealphal(pars)
-    #         if isinstance(newalphas, float) or not np.all(np.isfinite(newalphas)):
-    #             continue 
-    #         if count > maxiter:
-    #             return "error"
-    #     alphal = alphal[:self.nstars, :]
-    #     return alphal
-    def snr_check(self, alphal0, pars, maxiter=100):
+    def snr_check(self, alphal0, pars, maxiter=100): #FIXME handle array as alphal0 -- only for ps
         if isinstance(alphal0, (float, str)) or not np.all(np.isfinite(alphal0)):
             return "error"
 
@@ -454,10 +337,7 @@ class Sampler():
         return alphal[:self.nstars, :]
 
     def lnlike(self,pars):
-        # print('In lnlike 1')
-        # start = time.perf_counter()
         if ~np.isfinite(self.logprior(pars)):
-            # print('First nan check lnlike')
             return -np.inf
         alphal = self.samplealphal(pars)
         if isinstance(alphal, str):                  # "nolens": the model predicts no signal
@@ -470,21 +350,16 @@ class Sampler():
         if self.massprofile.type == 'ps':
             # if ps, need to do snr check and re-sample if any have too high snr. this stops walkers from getting too stuck.
              alphal = self.snr_check(alphal, pars)
-             if isinstance(alphal, str):              # was: alphal == "error"
+             if isinstance(alphal, str):
                 return -np.inf
         if np.any(np.isnan(alphal)): #FIXME Should not be needed!
-            # print('Second nan check lnlike')
             return -np.inf
         try:
-            #print('Trying')
             diff = alphal.value - self.data
         except:
-            # print('Third nan check lnlike')
             return -np.inf
         chisq = -0.5 * np.sum((diff)**2 / self.survey.alphasigma.value**2 -np.log(2 * np.pi * self.survey.alphasigma.value**2))
         # self.chisq.append([pars,chisq]) #specific to 1 par case
-        # end = time.perf_counter()
-        # print(f'Time taken for lnlike: {(end-start):.6f} second')
         return chisq
 
     def lnlike_noise(self,pars):
@@ -495,7 +370,6 @@ class Sampler():
 
     @staticmethod
     def find_nlens(Ml_, survey):
-        # print(Ml_)
         volume = survey.fov_rad**2 * survey.maxdlens**3 / 3.
         mass = (RHO_DM*volume).to(u.Msun)
         nlens_k = mass.value/Ml_
@@ -506,7 +380,6 @@ class Sampler():
         #if False: #Switch to if statement below for CDM as null hypothesis for WDM
         if self.massfunction!=None:
             if (self.massfunction.Name == 'WDM Stream' or self.massfunction.Name == 'WDM Lensing'):
-                # print('inside WDM') #FIXME
                 self.data = AccelData(self.survey, nstars=self.nstars,
                     ndims=self.ndims,wdm=True).data.to_numpy()
             else:
@@ -593,67 +466,36 @@ class Sampler():
                 logM0 = pars[i+1]
                 newmf = mf.PowerLaw(m_l=self.massfunction.m_l,logM_0=logM0, logalpha=logalpha,sur=self.survey)
             elif mftype == 'Tinker':
-                # a = pars[i+0]
-                # b = pars[i+1]
-                # c = pars[i+2]
                 logkb = pars[i+0]*1/u.Mpc
                 nb = pars[i+1]
-                #k_s = pars[i+6]
                 newmf = mf.Tinker(m_l=self.massfunction.m_l,logkb=logkb,nb=nb,sur=self.survey)
             elif mftype == 'TinkerMishra':
-                # a = pars[i+0]
-                # b = pars[i+1]
-                # c = pars[i+2]
                 logkb = pars[i+0]*1/u.Mpc
                 nb = pars[i+1]
-                #k_s = pars[i+6]
                 newmf = mf.Tinker_Mishra(m_l=self.massfunction.m_l,logkb=logkb,nb=nb,sur=self.survey)#, k_b=k_b, n_b=n_b, k_s=k_s)
             elif mftype == 'CDM':
-                # loga = pars[i+0]
                 b = pars[i+0]
-                # logc = pars[i+1]
-                #print('before CDM makenewmass')
                 newmf = mf.CDM_Test(m_l=self.massfunction.m_l, b = b,sur=self.survey)
-                #print('after CDM makenewmass')
             elif mftype == 'WDM Stream':
                 logmwdm = pars[i+0]
                 gamma = pars[i+1]
                 beta = pars[i+2]
-                # loga_cdm = pars[i+3]
-                # b_cdm = pars[i+4]
-                # logc_cdm =pars[i+5]
                 newmf = mf.WDM_stream(m_l=self.massfunction.m_l,logmwdm=logmwdm,gamma=gamma, beta=beta,sur=self.survey)#, loga_cdm=loga_cdm,b_cdm=b_cdm,logc_cdm=logc_cdm)
-            elif mftype == 'WDM Lensing':
-                mwdm = pars[i+0]
-                beta = pars[i+1]
-                newmf = mf.WDM_lensing(m_l=self.massfunction.m_l,mwdm=mwdm, beta=beta,sur=self.survey)
-            elif mftype == 'Press Schechter':
-                del_crit = pars[i+0]
-                #b = pars[i+1]
-                #logc = pars[i+2]
-                newmf = mf.PressSchechter_test(m_l=self.massfunction.m_l,del_crit = del_crit,sur=self.survey)#,b = b,logc = logc)
             elif mftype == 'PBH':
-                #print('inside pbh make new mass')
-                # logfpbh = pars[i+0]
-                #b = pars[i+1]
-                #logc = pars[i+2]
                 logmass = pars[i+0]
                 sigma = pars[i+1]
                 newmf = mf.PBH_Gaussian(logmass = logmass,sigma = sigma, sur=self.survey)
-            #else:
-             #   raise NotImplementedError("""Need to add this mass function to
-              #  sampler.""")
+
+            # newmp = []
+            # n_l = np.asarray(newmf.n_l).astype(int)
             newmp = []
-            # n_lens = sum(newmf.n_l)
-            ##Testing Pbh No Added Lens 
+            mlens = getattr(newmf, 'm_lens', newmf.m_l)   # lens mass of each n_l entry (bin centres)
             n_l = np.asarray(newmf.n_l).astype(int)
             n_lens = n_l.sum()
             if n_lens == 0:
-                # return -np.inf
                 return "nolens"
             nonzero = np.nonzero(n_l)[0]   
 
-            # start = time.perf_counter()
             if n_lens>1:
                 nonzero = np.nonzero(newmf.n_l)
                 sampling_pool = np.repeat(nonzero, newmf.n_l[nonzero])
@@ -662,53 +504,37 @@ class Sampler():
             if mptype == 'ps':
                 if n_lens == 1:
                     index = np.nonzero(newmf.n_l.astype(int))
-                    kwargs['Ml'] = int(newmf.m_l[index[0]]) * u.Msun
+                    # kwargs['Ml'] = int(newmf.m_l[index[0]]) * u.Msun ##Check if this should change when PBH isnt changed yet
+                    kwargs['Ml'] = float(mlens[index[0]][0]) * u.Msun
                     newmp = mp.PointSource(**kwargs)
                 else:
                     for index in ran_samp:
-                        kwargs['Ml'] = newmf.m_l[index] * u.Msun
+                        kwargs['Ml'] = mlens[index] * u.Msun
                         newmp.extend([mp.PointSource(**kwargs)])
-                    # for newmf_ml, num_lenses in zip(newmf.m_l, newmf.n_l.astype(int)):
-                    #     kwargs['Ml'] = newmf_ml*u.Msun
-                    #     newmp.extend([mp.PointSource(**kwargs)for _ in range(num_lenses)])
 
             elif mptype == 'gaussian':
                 kwargs['R0'] = 10**pars[0]*u.pc
                 if n_lens ==1:
                     index = np.nonzero(newmf.n_l)
-                    kwargs['Ml'] = newmf.m_l[index[0]] * u.Msun
+                    kwargs['Ml'] = float(mlens[index[0]][0]) * u.Msun
                     newmp = mp.Gaussian(**kwargs)
                 else:
                     for index in ran_samp:
-                        kwargs['Ml'] = newmf.m_l[index] * u.Msun
+                        kwargs['Ml'] = mlens[index] * u.Msun
                         newmp.extend([mp.Gaussian(**kwargs)])
-                    # for newmf_ml, num_lenses in zip(newmf.m_l, newmf.n_l):
-                    #     kwargs['Ml'] = newmf_ml * u.Msun
-                    #     newmp.extend([mp.Gaussian(**kwargs) for _ in range(num_lenses)])
-
             elif mptype == 'nfw':
                 kwargs['c200'] = 10**pars[0]
-                #print('in nfw makenewmass')
                 if n_lens == 1: ##Case with only one lens, add the mass profile corresponding to it as an object not list
                     index = np.nonzero(newmf.n_l.astype(int))
-                    kwargs['Ml'] = int(newmf.m_l[index[0]]) * u.Msun
+                    kwargs['Ml'] = float(mlens[index[0]][0]) * u.Msun
                     newmp = mp.NFW(**kwargs)
                 else:
                     for index in ran_samp:
-                        kwargs['Ml'] = newmf.m_l[index] * u.Msun
+                        kwargs['Ml'] = mlens[index] * u.Msun
                         newmp.extend([mp.NFW(**kwargs)])
-                    #print(newmf.n_l)
-                    # start3 = time.perf_counter()
-                    # for ind123, (newmf_ml, num_lenses) in enumerate(zip(newmf.m_l, newmf.n_l.astype(int))):
-                    #     kwargs['Ml'] = newmf_ml * u.Msun
-                    #     newmp.extend([mp.NFW(**kwargs) for _ in range(num_lenses)])
-                    # end3 = time.perf_counter()
-                    # print(f'Time taken for total nfw loop: {(end3 - start3):.6f} second')
             else:
                 raise NotImplementedError("""Need to add this mass profile/mass function to
                 sampler.""")
-            # end = time.perf_counter()
-            # print(f'Time taken for make new mass loop: {(end - start):.6f} second')
             return newmp, newmf #Array of mp
         else:
             if mptype == 'ps':

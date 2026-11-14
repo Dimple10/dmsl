@@ -8,7 +8,7 @@ import astropy.constants as const
 #from dmsl.convenience import pshape
 import time
 
-def alphal(Ml, bvec, vvec):
+def alphal(Ml, bvec, vvec, eff=None):
     '''
     Calculates the apparent acceleration due to lensing.
     Ml must be a mass profile instance.
@@ -17,8 +17,6 @@ def alphal(Ml, bvec, vvec):
     vvvec must be in length / unit time units -- if not a Quantity, will be
     assumed to be in km/s.
     '''
-    # print('In lensing model 5')
-    # start1 = time.perf_counter()
     if isinstance(bvec, u.Quantity) == False:
         bvec *= u.kpc
     if isinstance(vvec, u.Quantity) == False:
@@ -38,10 +36,11 @@ def alphal(Ml, bvec, vvec):
         alphal = accmag[:,np.newaxis] * vec_part
     else:
         alphal = accmag*vec_part
-    #print('in lm, accmag, vec:', accmag,vec_part)
-    # end2=time.perf_counter()
-    # print(f'Time taken for lensing model: {(end2 - start1):.6f} second')
-    return (alphal).to(u.uas / u.yr**2, equivalencies = u.dimensionless_angles())
+    # return (alphal).to(u.uas / u.yr**2, equivalencies = u.dimensionless_angles())
+    alphal = (alphal).to(u.uas / u.yr**2, equivalencies = u.dimensionless_angles())
+    if eff is not None:
+        alphal = alphal * np.asarray(eff, dtype=float).reshape(-1, 1)   # D_LS/D_S per star
+    return alphal
 
 def alphal_vec(Ml, bvec, vvec, vdotvec = None):
     '''
