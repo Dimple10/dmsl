@@ -314,7 +314,14 @@ class Sampler():
                            n=nlens)
         else:
             # start2 = time.perf_counter()
-            newmassprofile, newmassfunction = self.make_new_mass(pars)
+            result = self.make_new_mass(pars)
+
+            # Handle zero-lens case returning -inf
+            if isinstance(result, float):
+                return result   # propagates -inf back to lnlike
+
+            newmassprofile, newmassfunction = result
+            #newmassprofile, newmassfunction = self.make_new_mass(pars)
             # end2 = time.perf_counter()
             # print(f'Time taken for makenewmass: {(end2 - start2):.6f} second')
             nlens = np.ceil(f*newmassfunction.n_l)
@@ -408,6 +415,8 @@ class Sampler():
             # print('First nan check lnlike')
             return -np.inf
         alphal = self.samplealphal(pars)
+        if isinstance(alphal, float):   # catches the -inf from zero-lens case
+            return alphal
         #FIXME
         if self.massprofile.type == 'ps':
             # if ps, need to do snr check and re-sample if any have too high snr. this stops walkers from getting too stuck.
@@ -451,7 +460,7 @@ class Sampler():
             if (self.massfunction.Name == 'WDM Stream' or self.massfunction.Name == 'WDM Lensing'):
                 # print('inside WDM') #FIXME
                 self.data = AccelData(self.survey, nstars=self.nstars,
-                    ndims=self.ndims,wdm=True).data.to_numpy()
+                    ndims=self.ndims,wdm=False).data.to_numpy()
             else:
                 self.data = AccelData(self.survey, nstars=self.nstars,
                                       ndims=self.ndims).data.to_numpy()
@@ -464,7 +473,7 @@ class Sampler():
         rv = gsh.initialize_dist(target=self.survey.target,
                 rmax=self.survey.maxdlens.to(u.kpc).value)
         self.rdist = rv
-        self.bs = np.logspace(-8, np.log10(np.sqrt(2)*self.survey.fov_rad),
+        self.bs = np.logspace(np.log10(1e-8), np.log10(4*np.sqrt(2)*self.survey.fov_rad),
                 self.nstars)
         #print(self.bs)
         print('Prior loaded')
@@ -553,9 +562,9 @@ class Sampler():
             elif mftype == 'CDM':
                 # loga = pars[i+0]
                 b = pars[i+0]
-                logc = pars[i+1]
+                #logc = pars[i+1]
                 #print('before CDM makenewmass')
-                newmf = mf.CDM_Test(m_l=self.massfunction.m_l, b = b,logc = logc,sur=self.survey)
+                newmf = mf.CDM_Test(m_l=self.massfunction.m_l, b = b,sur=self.survey)
                 #print('after CDM makenewmass')
             elif mftype == 'WDM Stream':
                 logmwdm = pars[i+0]
@@ -587,6 +596,8 @@ class Sampler():
               #  sampler.""")
             newmp = []
             n_lens = sum(newmf.n_l)
+            if n_lens==0:
+                return -np.inf
             # start = time.perf_counter()
             if n_lens>1:
                 nonzero = np.nonzero(newmf.n_l)

@@ -16,6 +16,13 @@ import scipy
 import random
 import time
 
+import scipy.interpolate as si
+import scipy.interpolate.interpolate
+
+# Manually assign the correct class to the old location
+setattr(scipy.interpolate.interpolate, 'RegularGridInterpolator', si.RegularGridInterpolator)
+
+
 RHO_CRIT = cosmo.critical_density(0.)
 Rho_mean = cosmo.Om0 * RHO_CRIT
 Rho_dm = gsh.density(8. * u.kpc)
@@ -374,8 +381,8 @@ class Tinker_Mishra(MassFunction):
         c = Counter(ran_samp)
         nl = [c[m_l] for m_l in self.m_l]
         self.n_l = np.random.poisson(nl)
-        if sum(self.n_l) == 0:
-            self.n_l[random.randint(0,len(self.n_l)-1)] = 1
+        #if sum(self.n_l) == 0:
+        #    self.n_l[random.randint(0,len(self.n_l)-1)] = 1
 
     def __post_init__(self):
         self.radius()
@@ -486,9 +493,9 @@ class CDM_Test(MassFunction):
     loga: float = np.log10(3.26 * 10 ** -5)
     b: float = -1.9
     logc: float = np.log10(2.57 * 10 ** 7)
-    nparams: int = 2
-    param_names: list = field(default_factory=lambda: ['b', 'logc'])
-    param_range: dict = field(default_factory=lambda: {'b': (-2.5, -1), 'logc': (6, 8)})
+    nparams: int = 1
+    param_names: list = field(default_factory=lambda: ['b'])
+    param_range: dict = field(default_factory=lambda: {'b': (-2.5, -1)})
 
     def find_Nl(self):
         self.den_n_l = (10 ** self.loga) * ((self.m_l / (10 ** self.logc)) ** self.b)/45  ##Units of M_sun^-1
@@ -524,23 +531,87 @@ class CDM_Test(MassFunction):
         # if nlens>1000:
         #     print('nlens>1000 in CDM,', int(nlens))
         # print('nlens,norm',nlens,norm)
-        if np.log10(nlens)>9:
-            nlens = nlens/10**(np.floor(np.log10(nlens))-8)
-            print('lowered nlens:',nlens)
+        #if np.log10(nlens)>9:
+        #    nlens = nlens/10**(np.floor(np.log10(nlens))-8)
+        #    print('lowered nlens:',nlens)
         ran_samp = np.random.choice(self.m_l, int(nlens), p=self.den_n_l / sum(self.den_n_l))
         c = Counter(ran_samp)
         nl = [c[m_l] for m_l in self.m_l]
         # print('nl=', nl)
 
         self.n_l = np.random.poisson(nl)
-        if sum(self.n_l) == 0:
+        #if sum(self.n_l) == 0:
             # print('Added random lens')
-            self.n_l[random.randint(0,len(self.n_l)-1)] = 1
+        #  self.n_l[random.randint(0,len(self.n_l)-1)] = 1
         #print('final nl=', self.n_l)
 
     def __post_init__(self):
         self.find_Nl()
 
+@dataclass
+class WDM_stream_testing(MassFunction):
+    Name: str = 'WDM Stream'
+    m_l: list = field(default_factory=lambda: np.logspace(0, 2, 100))
+    n_l: list = field(default_factory=lambda: np.zeros((100)))
+    den_n_l: list = field(default_factory=lambda: np.zeros((100)))
+    M_hm: float = 1.0
+    gamma: float = 2.7
+    beta: float = 0.99
+    logmwdm: float = np.log10(6.3) #in KeV
+    omega_wdm: float = 0.25
+    loga_cdm: float = np.log10(3.26*10**-5)
+    b_cdm: float = -1.9
+    logc_cdm: float = np.log10(2.57*10**7)
+    a : float = 1.65*10**10
+    b: float = -3.33
+    c :float = 1.33
+    d :float = 2.66
+    nparams: int = 3 #m_wdm, gamma, beta
+    param_names: list = field(default_factory=lambda:['logmwdm', 'gamma', 'beta'])#, 'loga_cdm','b_cdm','logc_cdm'])
+    param_range: dict = field(default_factory=lambda:{'logmwdm': (-2,4),'gamma': (0.01, 60), 'beta':(0.1,3)})#,
+                                                     # 'loga_cdm':(-8, 2), 'b_cdm': (-4, -0.01), 'logc_cdm':(4, 10)})
+    def calc_Mhm(self):
+        self.M_hm = self.a * (10**self.logmwdm)** self.b * (self.omega_wdm/0.25)**self.c #* (h/0.7)**2.66
+        #print(self.M_hm)
+
+    def find_Nl(self):
+        cdm = CDM_Test(m_l=self.m_l, sur=self.sur)#, loga=self.loga_cdm, b=self.b_cdm, logc=self.logc_cdm) #return dN/dM, we need dN/dlnM
+        cdm_den_nl = cdm.den_n_l * cdm.m_l #CDM dn/dm without correction
+        #print('cdm den:',cdm_den_nl)
+        self.den_n_l = (1 + self.gamma*self.M_hm/self.m_l)**(-1*self.beta) * cdm_den_nl
+        #Convert from dN/dlnM to dN/dM--
+        self.den_n_l = self.den_n_l / self.m_l
+
+        vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.  # * 12 * 8 * 10l
+        correction = (vol / MW_vol).value * 76.66  # Correction factor w/ avg density in roman vs MW
+        self.integr = scipy.integrate.cumulative_trapezoid((self.den_n_l * correction), self.m_l)
+        nlens = self.integr[-1]
+        # N = np.diff(integr, prepend=0)
+        # m_dm = np.sum(N * self.m_l) * u.Msun
+        # m_sur = Rho_dm * vol
+        # # norm = m_sur / m_dm
+        # norm = vol / MW_vol
+        # print('WDM norm=', norm)
+        # N = norm * N
+        # nlens = sum(N)#/10**5
+        # print('nlens WDM',nlens)
+        lam_bin = np.diff(self.integr, prepend=0.)       # expected lenses per mass bin (99)
+        self.n_l = np.zeros(len(self.m_l), dtype=int)
+        self.n_l[:-1] = np.random.poisson(lam_bin)       # last grid point stays 0
+        #if sum(self.n_l) == 0:
+        #    self.n_l[random.randint(0,len(self.n_l)-1)] = 1
+        # print('nl:',self.n_l)
+        # integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l, initial=integr[0])
+        # N = np.diff(integr, prepend=integr[0])
+        # m_dm = np.sum(N * self.m_l) * u.Msun
+        # m_sur = Rho_dm * vol
+        # norm = m_sur / m_dm
+        # self.n_l = norm * N
+
+    def __post_init__(self):
+        self.calc_Mhm()
+        self.find_Nl()
+        
 @dataclass
 class WDM_stream(MassFunction):
     Name: str = 'WDM Stream'
@@ -592,8 +663,8 @@ class WDM_stream(MassFunction):
         c = Counter(ran_samp)
         nl = [c[m_l] for m_l in self.m_l]
         self.n_l = np.random.poisson(nl)
-        if sum(self.n_l) == 0:
-            self.n_l[random.randint(0,len(self.n_l)-1)] = 1
+        #if sum(self.n_l) == 0:
+        #    self.n_l[random.randint(0,len(self.n_l)-1)] = 1
         # print('nl:',self.n_l)
         # integr = scipy.integrate.cumulative_trapezoid(self.den_n_l, self.m_l, initial=integr[0])
         # N = np.diff(integr, prepend=integr[0])
@@ -713,32 +784,41 @@ class PBH(MassFunction): ##Check on normalization
     def __post_init__(self):
         self.calc()
         self.find_Nl()
+        
 
 @dataclass
 class PBH_Gaussian(MassFunction): ##Check on normalization
     Name: str = 'PBH'
-    # m_l: list = field(default_factory=lambda: np.logspace(0, 3, 100))
+    #m_l: list = field(default_factory=lambda: np.logspace(0, 3, 100))
     n_l: list = field(default_factory=lambda: np.zeros((100)))
     logmass: float = 0
     sigma: float = 10
     nparams: int = 2
     param_names: list = field(default_factory=lambda: ['logmass','sigma'])
     param_range: dict = field(default_factory=lambda: {'logmass': (0, 3), 'sigma':(0.072267, 67.39665)})
+    
+    def f_pbh_ceiling(self, m):
+        return 10.0**self.fpbh_interp(np.log10(m))
 
     def find_Nl(self):
         vol = self.sur.fov_rad ** 2 * self.sur.maxdlens ** 3 / 3.
         dist = np.random.normal(loc=10**self.logmass, scale=self.sigma, size=1000)
         dist = dist[dist>=0]
         counts, bins = np.histogram(dist)
-        self.m_l = bins[1:]
-        m_dm = np.sum(counts) * u.Msun
+        #self.m_l = bins[1:]
+        #m_dm = np.sum(counts) * u.Msun
+        self.m_l = (bins[1:] + bins[:-1]) / 2
+        m_dm = np.sum(counts * self.m_l) * u.Msun
         m_sur = Rho_dm * vol
         norm = m_sur / m_dm
-        self.n_l = np.random.poisson(norm*counts)
-        if sum(self.n_l) == 0:
-            self.n_l[random.randint(0, len(self.n_l) - 1)] = 1
+        weights = self.f_pbh_ceiling(self.m_l)
+        self.n_l = np.random.poisson(norm*counts*weights)
+        #if sum(self.n_l) == 0:
+        #    self.n_l[random.randint(0, len(self.n_l) - 1)] = 1
 
     def __post_init__(self):
+        with open('dmsl/f_pbh_interp.pkl', 'rb') as file:
+            self.fpbh_interp = pkl.load(file)
         self.find_Nl()
 
 @dataclass
