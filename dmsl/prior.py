@@ -28,13 +28,19 @@ def _G_grid(a, beta_lo=1.e-13, n=6000):
         _G_CACHE[a] = (np.log(beta), np.clip(G / G[-1], 1.e-300, 1. - 1.e-16))
     return _G_CACHE[a]
 
-def sample_beta(n, a, N):
+def sample_beta(n, a, N, beta_min=None):
     '''beta [rad] of the nearest of N lenses for n independent stars, field of side a [rad].
-    Inverse CDF of Q(beta) = 1 - (1 - G(beta^2))^N in log space, so the small-beta tail is resolved.'''
+    Inverse CDF of Q(beta) = 1 - (1 - G(beta^2))^N in log space, so the small-beta tail is resolved.
+    beta_min (a number or one value per star): draw from p(beta | N) cut to beta >= beta_min and renormalised.'''
     logbeta, G = _G_grid(a)
     logQ = np.log(np.clip(-np.expm1(N * np.log1p(-G)), 1.e-300, 1.))
     logQ, idx = np.unique(logQ, return_index=True)
-    return np.exp(np.interp(np.log(np.random.rand(n)), logQ, logbeta[idx]))
+    logu = np.log(np.random.rand(n))
+    if beta_min is not None:                     # u uniform on [Q(beta_min), 1] instead of [0, 1]
+        logqmin = np.interp(np.log(beta_min), logbeta[idx], logQ)
+        logu = np.logaddexp(logqmin, np.log1p(-np.exp(logqmin)) + logu)
+    beta = np.exp(np.interp(logu, logQ, logbeta[idx]))
+    return beta if beta_min is None else np.maximum(beta, beta_min)
 
 def pdf(b,a1,a2,n):
     G = cumtrapz(gs(b**2, a1,a2),x=b**2, initial=0)

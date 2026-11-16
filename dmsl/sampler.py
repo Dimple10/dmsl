@@ -20,6 +20,7 @@ import scipy.interpolate
 from scipy.interpolate import UnivariateSpline
 import exoplanet_core as xo
 import astropy.units as u
+import astropy.constants as const
 from astropy.coordinates import SkyCoord, Galactocentric, Galactic
 from collections import Counter
 
@@ -51,7 +52,7 @@ class Sampler():
     def __init__(self, nstars=None, nsamples=1000, nchains=8, ntune=1000,
             ndims=2, minlogMl=np.log10(1e0), maxlogMl=np.log10(1e6), MassProfile=mp.PointSource(**{'Ml' :
                 1.e7*u.Msun}),MassFunction=None, SNRcutoff=10., survey=None, overwrite=True,
-            usefraction=False, bs_upper_factor=4):
+                           usefraction=False, bmin_cut=True, baseline_yr=5.):
         self.nstars=nstars
         self.nsamples=nsamples
         self.nchains=nchains
@@ -67,8 +68,10 @@ class Sampler():
         self.logconcmax = 8
         self.logconcmin = 0
         self.overwrite = overwrite
+        self.bmin_cut = bmin_cut          # impose b >= b_min = max(R_E, v T) on every star
+        self.baseline_yr = baseline_yr    # astrometric baseline T [yr] in v T: 5 (GBTDS) or 22 (extended)
         self.usefraction = usefraction # Also sameple for fractional dark matter, just multiple nlens with f_chi
-        self.bs_upper_factor = bs_upper_factor
+        # self.bs_upper_factor = bs_upper_factor
         if survey is None:
             self.survey = Roman()
         else:
@@ -289,12 +292,20 @@ class Sampler():
                 return result
             newmassprofile, newmassfunction = result
             N = int(np.sum(np.ceil(f*newmassfunction.n_l)))
-
         dists = self.rdist.rvs(self.nstars)                          # d_L per star [kpc]
-        beta = sample_beta(self.nstars, self.survey.fov_rad, N)      # beta per star [rad]
+        vl = scipy.stats.truncnorm.rvs(a=0, b=550./220, loc=0.,scale =220, size=self.nstars)   # lens speed [km/s]
+        beta_min = None
+        if self.bmin_cut:                                            # b_min = max(R_E, v T), per star, from its own M, d_L, v
+            profs = newmassprofile if isinstance(newmassprofile, (list, tuple)) else [newmassprofile] * self.nstars
+            Mstar = np.array([u.Quantity(m.kwargs['Ml'], u.Msun).to_value(u.Msun) for m in profs])
+            Ds = self.survey.dstars.to(u.kpc).value
+            RE = np.sqrt((4. * const.G * u.Msun / const.c**2 * u.kpc).to(u.kpc**2).value
+                         * Mstar * dists * (1. - dists / Ds))       # Einstein radius [kpc]
+            vT = vl * (1. * u.km / u.s * u.yr).to(u.kpc).value * self.baseline_yr   # distance moved in T [kpc]
+            beta_min = np.maximum(RE, vT) / dists
+        beta = sample_beta(self.nstars, self.survey.fov_rad, N, beta_min=beta_min)   # beta per star [rad]
         beff = beta * dists                                          # b per star [kpc]
 
-        vl = scipy.stats.truncnorm.rvs(a=0, b=550./220, loc=0.,scale =220, size=self.nstars)
         bvec = np.zeros((self.nstars, 2))
         vvec = np.zeros((self.nstars, 2))
         if self.ndims==2:
@@ -347,11 +358,11 @@ class Sampler():
             return -np.inf
         
         #FIXME
-        if self.massprofile.type == 'ps':
-            # if ps, need to do snr check and re-sample if any have too high snr. this stops walkers from getting too stuck.
-             alphal = self.snr_check(alphal, pars)
-             if isinstance(alphal, str):
-                return -np.inf
+        # if self.massprofile.type == 'ps':
+        #     # if ps, need to do snr check and re-sample if any have too high snr. this stops walkers from getting too stuck.
+        #      alphal = self.snr_check(alphal, pars)
+        #      if isinstance(alphal, str):
+        #         return -np.inf
         if np.any(np.isnan(alphal)): #FIXME Should not be needed!
             return -np.inf
         try:
@@ -379,11 +390,11 @@ class Sampler():
         print('Creating data vector')
         #if False: #Switch to if statement below for CDM as null hypothesis for WDM
         if self.massfunction!=None:
-            if (self.massfunction.Name == 'WDM Stream' or self.massfunction.Name == 'WDM Lensing'):
-                self.data = AccelData(self.survey, nstars=self.nstars,
-                    ndims=self.ndims,wdm=True).data.to_numpy()
-            else:
-                self.data = AccelData(self.survey, nstars=self.nstars,
+            # if (self.massfunction.Name == 'WDM Stream' or self.massfunction.Name == 'WDM Lensing'):
+            #     self.data = AccelData(self.survey, nstars=self.nstars,
+            #         ndims=self.ndims,wdm=False).data.to_numpy()
+            # else:
+            self.data = AccelData(self.survey, nstars=self.nstars,
                                       ndims=self.ndims).data.to_numpy()
         else:
             self.data = AccelData(self.survey, nstars=self.nstars,
@@ -398,7 +409,7 @@ class Sampler():
                 np.log10(1e-8), 
                 np.log10(np.sqrt(2) * self.survey.fov_rad),
                 self.nstars)
-        print(f'Prior loaded (bs_upper_factor={self.bs_upper_factor}, bs=[{self.bs.min():.2e}, {self.bs.max():.2e}])')
+        # print(f'Prior loaded (bs_upper_factor={self.bs_upper_factor}, bs=[{self.bs.min():.2e}, {self.bs.max():.2e}])')
 
     def make_diagnostic_plots(self):
         #flatchain = self.sampler.get_chain(flat=True, discard=self.ntune)
