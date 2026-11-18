@@ -31,11 +31,18 @@ from dmsl.survey import *
 import dmsl.plotting as plot
 import dmsl.galaxy_subhalo_dist as gsh
 from dmsl.prior import *
+from dmsl.prior import _G_grid
 
 import dmsl.lensing_model as lm
 import dmsl.mass_profile as mp
 import dmsl.mass_function as mf
 from multiprocessing import Pool
+
+# Route B constants: 4 G Msun (km/s)^2 / (c^2 kpc^3) in uas/yr^2, 4 G Msun kpc / c^2 in kpc^2, (km/s) yr in kpc
+_ACC_UNIT = (4. * const.G * u.Msun * (u.km / u.s)**2 / (const.c**2 * u.kpc**3)).to(
+    u.uas / u.yr**2, equivalencies=u.dimensionless_angles()).value
+_RE2_UNIT = (4. * const.G * u.Msun / const.c**2 * u.kpc).to(u.kpc**2).value
+_KMS_YR_KPC = (1. * u.km / u.s * u.yr).to(u.kpc).value
 import time
 RHO_DM = gsh.density(8.*u.kpc)
 
@@ -52,7 +59,8 @@ class Sampler():
     def __init__(self, nstars=None, nsamples=1000, nchains=8, ntune=1000,
             ndims=2, minlogMl=np.log10(1e0), maxlogMl=np.log10(1e6), MassProfile=mp.PointSource(**{'Ml' :
                 1.e7*u.Msun}),MassFunction=None, SNRcutoff=10., survey=None, overwrite=True,
-                           usefraction=False, bmin_cut=True, baseline_yr=5.):
+                           usefraction=False, bmin_cut=True, baseline_yr=5.,
+            likelihood='single', K_exp=20000, R_exp=50, det_k=7.):
         self.nstars=nstars
         self.nsamples=nsamples
         self.nchains=nchains
@@ -70,6 +78,12 @@ class Sampler():
         self.overwrite = overwrite
         self.bmin_cut = bmin_cut          # impose b >= b_min = max(R_E, v T) on every star
         self.baseline_yr = baseline_yr    # astrometric baseline T [yr] in v T: 5 (GBTDS) or 22 (extended)
+        if likelihood not in ('single', 'expected', 'detections'):
+            raise ValueError("likelihood must be 'single', 'expected' or 'detections'")
+        self.likelihood = likelihood      # 'single': one lens draw per star (as before); 'expected'/'detections': Route B
+        self.K_exp = K_exp                # Route B: lens draws per likelihood call
+        self.R_exp = R_exp                # Route B: lens-count realisations per call
+        self.det_k = det_k                # Route B 'detections': a star counts as detected above det_k sigma
         self.usefraction = usefraction # Also sameple for fractional dark matter, just multiple nlens with f_chi
         # self.bs_upper_factor = bs_upper_factor
         if survey is None:
@@ -347,7 +361,149 @@ class Sampler():
             alphal = np.append(alphal, newalphas[mask, :], axis=0)
         return alphal[:self.nstars, :]
 
-    def lnlike(self,pars):
+    # ---------------- Route B: full-survey expected likelihood ----------------
+    # The null data (no lensing) are not drawn. For each theta the code averages over lens draws instead:
+    #   likelihood='expected':   dlnL = -1/2 N_star E[|alpha|^2] / sigma_star^2 = -1/2 nstars E[|alpha|^2] / alphasigma^2
+    #                            (the expectation of the single-draw lnL - no-signal, for the full survey)
+    #   likelihood='detections': dlnL = -N_star P(|alpha| > det_k sigma_star)
+    #                            (Poisson probability of seeing none of the expected clearly detectable stars)
+    # sigma_star = alphasigma * sqrt(survey.nstars / nstars) undoes the 1000-star rescaling of alphasigma.
+    # Close passes are rare but dominate E[|alpha|^2], so beta is drawn log-uniformly in its CDF and weighted back.
+
+    def new_massfunction(self, pars):
+        '''The mass function at pars (the same dispatch as make_new_mass, without building per-star profiles).'''
+        i = 0 if self.massprofile.type == 'ps' else 1
+        mftype = self.massfunction.Name
+        ml = self.massfunction.m_l
+        if mftype == 'CDM':
+            return mf.CDM_Test(m_l=ml, b=pars[i], sur=self.survey)
+        if mftype == 'TinkerMishra':
+            return mf.Tinker_Mishra(m_l=ml, logkb=pars[i]/u.Mpc, nb=pars[i+1], sur=self.survey)
+        if mftype == 'WDM Stream':
+            return mf.WDM_stream(m_l=ml, logmwdm=pars[i], gamma=pars[i+1], beta=pars[i+2], sur=self.survey)
+        if mftype == 'PBH':
+            return mf.PBH_Gaussian(logmass=pars[i], sigma=pars[i+1], sur=self.survey)
+        raise NotImplementedError(f'Route B not set up for {mftype}')
+
+    def alpha_vec(self, M, b, v, btheta, vtheta, d, c200=None):
+        '''alpha [uas/yr^2], shape (n, 2), for arrays of lens mass M [Msun], b [kpc], v [km/s], directions btheta, vtheta
+        and lens distance d [kpc]. Same formula as lensing_model.alphal (A, B, C terms and D_LS/D_S), vectorised:
+        an NFW profile when c200 is given, a point source otherwise.'''
+        bh = np.stack([np.cos(btheta), np.sin(btheta)], 1)
+        vh = np.stack([np.cos(vtheta), np.sin(vtheta)], 1)
+        bv = np.sum(bh * vh, 1)[:, None]
+        A = -8. * bv**2 * bh + 2. * bh + 4. * bv * vh
+        B = 5. * bv**2 * bh - 2. * bv * vh - bh
+        C = -1. * bv**2 * bh
+        if c200 is None:
+            vec = M[:, None] * A                                                   # point source: M' = M'' = 0
+        else:
+            rhoc = mp.RHO_CRIT.to(u.Msun / u.kpc**3).value
+            rhos = rhoc * (200. / 3.) * c200**3 / (np.log(1. + c200) - c200 / (1. + c200))
+            rs = (M / ((4. / 3.) * np.pi * c200**3 * 200. * rhoc))**(1. / 3.)
+            x = b / rs
+            with np.errstate(divide='ignore', invalid='ignore', over='ignore'):
+                s = np.sqrt(np.abs(1. - x**2))
+                F = np.where(x == 1., 1., np.where(x <= 1., np.arctanh(s) / s, np.arctan(s) / s))
+                dF = (1. - x**2 * F) / (x * (x**2 - 1.))
+                d2F = (1. - 3. * x**2 + (x**2 + x**4) * F + (x**3 - x**5) * dF) / (x**2 * (x**2 - 1.)**2)
+                Mb = 4. * np.pi * rhos * rs**3 * (np.log(x / 2.) + F)
+                small = x < 1.e-3                                                  # Taylor branch, as in NFW.M
+                Mb[small] = 4. * np.pi * rhos * rs[small]**3 * (
+                    0.25 * (-2. * np.log(x[small]) + np.log(4.) - 1.) * x[small]**2
+                    + (1. / 32.) * (-7. + 12. * np.log(2.) - 12. * np.log(x[small])) * x[small]**4)
+                Mpb = 4. * np.pi * rhos * rs**2 * (1. / x + dF) * b                # M'(b) b   [Msun]
+                Mppb2 = 4. * np.pi * rhos * rs * (-1. / x**2 + d2F) * b**2         # M''(b) b^2 [Msun]
+            vec = Mb[:, None] * A + Mpb[:, None] * B + Mppb2[:, None] * C
+        acc = _ACC_UNIT * v**2 / b**3                                              # 4 G v^2 / (c^2 b^3) per Msun [uas/yr^2]
+        eff = np.clip(1. - d / self.survey.dstars.to(u.kpc).value, 0., None)
+        return acc[:, None] * vec * eff[:, None]
+
+    def draw_alpha_weighted(self, pars, K, R):
+        '''K draws of alpha [uas/yr^2] from the lens population at pars, with importance weights w (mean 1).
+        R values of the lens count N ~ Poisson(lambda), K // R draws each; masses follow lambda per mass bin.
+        Each star's beta comes from p(beta | N) cut to b >= b_min (as in samplealphal). Rare heavy lenses and rare
+        close passes dominate E[|alpha|^2], so both are oversampled and weighted back to the true distribution:
+        half the draws take the mass bin uniformly among bins with lenses, half in proportion to lambda;
+        half the draws take u = CDF(beta) uniformly, half log-uniformly (close passes).'''
+        if self.usefraction:
+            raise NotImplementedError('Route B not set up for usefraction')
+        mptype = self.massprofile.type
+        if mptype not in ('nfw', 'ps'):
+            raise NotImplementedError(f'Route B not set up for {mptype} profiles')
+        c200 = 10**pars[0] if mptype == 'nfw' else None
+        newmf = self.new_massfunction(pars)
+        mlens_all = np.asarray(getattr(newmf, 'm_lens', newmf.m_l), dtype=float)
+        lam = np.diff(np.concatenate([[0.], newmf.integr])) if hasattr(newmf, 'integr') else None
+        a = self.survey.fov_rad
+        Ds = self.survey.dstars.to(u.kpc).value
+        logbeta, G = _G_grid(a)
+        kk = K // R
+        alpha = np.zeros((kk * R, 2))
+        w = np.ones(kk * R)
+        for j in range(R):
+            if lam is not None:                                    # Poisson count; masses weighted by lambda per bin
+                N = np.random.poisson(lam.sum())
+                pm = lam / lam.sum() if lam.sum() > 0 else None
+                mlens = mlens_all[:len(lam)]
+            else:                                                  # e.g. PBH: one realisation of the mass function
+                n_l = np.asarray((newmf if j == 0 else self.new_massfunction(pars)).n_l).astype(int)
+                N = int(n_l.sum())
+                pm = n_l / N if N > 0 else None
+                mlens = mlens_all[:len(n_l)]
+            if N == 0:
+                continue                                           # no lens: alpha = 0, weight 1
+            sl = slice(j * kk, (j + 1) * kk)
+            nz = np.flatnonzero(pm > 0)                            # mass: half from pm, half uniform over bins with lenses
+            qm = 0.5 * pm[nz] + 0.5 / len(nz)
+            k = np.random.choice(len(nz), kk, p=qm / qm.sum())
+            M = mlens[nz][k]
+            wm = pm[nz][k] / qm[k]
+            d = self.rdist.rvs(kk)
+            v = scipy.stats.truncnorm.rvs(a=0, b=550. / 220, loc=0., scale=220, size=kk)
+            logQ = np.log(np.clip(-np.expm1(N * np.log1p(-G)), 1.e-300, 1.))
+            logQ, idx = np.unique(logQ, return_index=True)
+            lb = logbeta[idx]
+            if self.bmin_cut:
+                RE = np.sqrt(_RE2_UNIT * M * d * (1. - d / Ds))    # Einstein radius [kpc]
+                vT = v * _KMS_YR_KPC * self.baseline_yr            # distance moved in T [kpc]
+                logq0 = np.interp(np.log(np.maximum(RE, vT) / d), lb, logQ)
+            else:
+                logq0 = np.full(kk, logQ[0])
+            logq0 = np.minimum(logq0, np.log1p(-1.e-12))
+            q0 = np.exp(logq0)
+            logu = np.where(np.random.rand(kk) < 0.5,               # u: half uniform on [Q0, 1], half log-uniform
+                            np.log(q0 + (1. - q0) * np.random.rand(kk)), logq0 * (1. - np.random.rand(kk)))
+            u_ = np.exp(logu)
+            p_true = 1. / (1. - q0)                                 # densities in u
+            p_prop = 0.5 * p_true + 0.5 / (u_ * (-logq0))
+            w[sl] = wm * p_true / p_prop
+            beta = np.exp(np.interp(logu, logQ, lb))
+            alpha[sl] = self.alpha_vec(M, beta * d, v, np.random.rand(kk) * 2. * np.pi,
+                                       np.random.rand(kk) * 2. * np.pi, d, c200)
+        return alpha, w
+
+    def lnlike_expected(self, pars):
+        '''Route B dlnL relative to no lensing (see the comment above new_massfunction).'''
+        if not np.isfinite(self.logprior(pars)):
+            return -np.inf
+        alpha, w = self.draw_alpha_weighted(pars, self.K_exp, self.R_exp)
+        a2 = np.sum(alpha**2, axis=1)
+        if not np.all(np.isfinite(a2)):
+            return -np.inf
+        sig_eff = self.survey.alphasigma.value
+        if self.likelihood == 'expected':
+            return float(-0.5 * self.nstars * np.mean(w * a2) / sig_eff**2)
+        nsurv = float(self.survey.nstars)
+        sig_star = sig_eff * np.sqrt(nsurv / self.nstars)
+        return float(-nsurv * np.mean(w * (a2 > (self.det_k * sig_star)**2)))
+
+    def lnlike(self, pars):
+        if self.likelihood == 'single':
+            return self.lnlike_single(pars)
+        return self.lnlike_expected(pars)
+
+    def lnlike_single(self,pars):
         if ~np.isfinite(self.logprior(pars)):
             return -np.inf
         alphal = self.samplealphal(pars)
